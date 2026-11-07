@@ -5,6 +5,7 @@ Tests:
 1. Async engine with prepared_statement_cache_size=0 (asyncpg + PgBouncer)
 2. Sync engine with prepare_threshold=None (psycopg3 + PgBouncer)
 """
+
 import asyncio
 import logging
 import os

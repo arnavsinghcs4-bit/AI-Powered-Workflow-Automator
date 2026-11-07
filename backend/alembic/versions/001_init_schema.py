@@ -1,4 +1,5 @@
 """Initial schema with 7 tables and RLS."""
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -17,7 +18,12 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("password_hash", sa.String(255), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
     )
@@ -32,7 +38,12 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -48,11 +59,21 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("type", sa.String(50), nullable=False),
         sa.Column("config", sa.JSON(), server_default="{}", nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("type IN ('extract_text', 'llm_extract', 'validate', 'send_email', 'webhook')", name="ck_pipeline_steps_type"),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "type IN ('extract_text', 'llm_extract', 'validate', 'send_email', 'webhook')",
+            name="ck_pipeline_steps_type",
+        ),
         sa.ForeignKeyConstraint(["pipeline_id"], ["pipelines.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("pipeline_id", "position", name="uq_pipeline_steps_position"),
+        sa.UniqueConstraint(
+            "pipeline_id", "position", name="uq_pipeline_steps_position"
+        ),
     )
     op.create_index("idx_pipeline_steps_pipeline_id", "pipeline_steps", ["pipeline_id"])
     op.execute("ALTER TABLE pipeline_steps ENABLE ROW LEVEL SECURITY;")
@@ -66,7 +87,12 @@ def upgrade() -> None:
         sa.Column("filename", sa.String(255), nullable=False),
         sa.Column("storage_path", sa.String(255), nullable=False),
         sa.Column("mime_type", sa.String(100)),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -86,8 +112,16 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(255)),
         sa.Column("started_at", sa.TIMESTAMP(timezone=True)),
         sa.Column("finished_at", sa.TIMESTAMP(timezone=True)),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("status IN ('queued', 'running', 'succeeded', 'failed', 'needs_review')", name="ck_jobs_status"),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed', 'needs_review')",
+            name="ck_jobs_status",
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["pipeline_id"], ["pipelines.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["file_id"], ["files.id"], ondelete="CASCADE"),
@@ -114,10 +148,20 @@ def upgrade() -> None:
         sa.Column("error", sa.Text()),
         sa.Column("attempt", sa.Integer(), server_default="1", nullable=False),
         sa.Column("duration_ms", sa.Integer()),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("status IN ('queued', 'running', 'succeeded', 'failed')", name="ck_step_runs_status"),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')",
+            name="ck_step_runs_status",
+        ),
         sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["step_id"], ["pipeline_steps.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["step_id"], ["pipeline_steps.id"], ondelete="SET NULL"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_step_runs_job_id", "step_runs", ["job_id"])
@@ -138,7 +182,12 @@ def upgrade() -> None:
         sa.Column("cost_usd", sa.Numeric(10, 6)),
         sa.Column("latency_ms", sa.Integer()),
         sa.Column("valid_json", sa.Boolean(), server_default="false", nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["step_run_id"], ["step_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

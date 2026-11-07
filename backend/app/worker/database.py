@@ -1,4 +1,5 @@
 """Sync database configuration for Celery worker."""
+
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import QueuePool
 
@@ -11,7 +12,9 @@ def get_sync_engine() -> Engine:
     Uses prepare_threshold=None to disable prepared statements for PgBouncer compatibility.
     """
     # Convert to psycopg driver (sync)
-    sync_url = config.SUPABASE_POOLED_URL.replace("postgresql://", "postgresql+psycopg://")
+    sync_url = config.SUPABASE_POOLED_URL.replace(
+        "postgresql://", "postgresql+psycopg://"
+    )
 
     engine = create_engine(
         sync_url,

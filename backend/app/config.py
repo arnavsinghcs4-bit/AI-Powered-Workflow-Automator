@@ -1,4 +1,5 @@
 """Application configuration."""
+
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -58,7 +59,10 @@ class Config(BaseSettings):
             )
 
         # Validate JWT_SECRET on startup
-        if self.ENV != "dev" and self.JWT_SECRET == "your-secret-key-change-me-in-production":
+        if (
+            self.ENV != "dev"
+            and self.JWT_SECRET == "your-secret-key-change-me-in-production"
+        ):
             raise ValueError(
                 "JWT_SECRET must be changed from the placeholder value in production. "
                 "Set ENV=dev to allow the placeholder, or provide a real JWT_SECRET."

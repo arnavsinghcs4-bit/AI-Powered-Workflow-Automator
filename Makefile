@@ -14,11 +14,13 @@ test:
 	cd backend && pytest -v --asyncio-mode=auto
 
 lint:
-	cd backend && ruff check --fix .
+	cd backend && ruff check .
+	cd backend && ruff format --check .
 	cd frontend && npm run lint
 
-format-check:
-	cd backend && ruff format --check .
+format:
+	cd backend && ruff format .
+	cd backend && ruff check --fix .
 
 dev:
 	docker-compose up --build
@@ -41,8 +43,8 @@ help:
 	@echo "  make migrate       - Run Alembic migrations (upgrade)"
 	@echo "  make downgrade     - Rollback last Alembic migration"
 	@echo "  make test          - Run pytest"
-	@echo "  make lint          - Run ruff linter and fixer"
-	@echo "  make format-check  - Check ruff format without changes"
+	@echo "  make lint          - Check code style (ruff check + ruff format --check)"
+	@echo "  make format        - Format code with ruff and fix lint issues"
 	@echo "  make dev           - Start all services with docker-compose"
 	@echo "  make down          - Stop all services"
 	@echo "  make logs          - Tail service logs"

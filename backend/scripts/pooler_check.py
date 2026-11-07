@@ -4,6 +4,7 @@ Pooler check: runs concurrent queries through the async pooled connection.
 Verifies prepared statement cache is disabled for PgBouncer compatibility.
 Reports any prepared statement errors that would occur with misconfigured asyncpg.
 """
+
 import asyncio
 import logging
 import os
@@ -53,13 +54,17 @@ async def test_pooler_connection(pooled_url: str, num_queries: int = 20):
         """Run a query from a session."""
         async with AsyncSession(engine, expire_on_commit=False) as session:
             try:
-                result = await session.execute(text("SELECT :val as value"), {"val": session_id})
+                result = await session.execute(
+                    text("SELECT :val as value"), {"val": session_id}
+                )
                 row = result.fetchone()
                 return session_id, row[0], None
             except (OSError, RuntimeError, ValueError) as e:
                 return session_id, None, str(e)
 
-    logger.info(f"Running {num_queries} concurrent queries through async pooled connection...")
+    logger.info(
+        f"Running {num_queries} concurrent queries through async pooled connection..."
+    )
     tasks = [run_query(i) for i in range(num_queries)]
     results = await asyncio.gather(*tasks)
 

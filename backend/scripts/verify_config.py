@@ -3,6 +3,7 @@
 Connection configuration test: verify async and sync engines are configured correctly.
 This test does NOT require network access - it validates the configuration structure.
 """
+
 import logging
 import sys
 from pathlib import Path
@@ -95,13 +96,17 @@ def test_url_params():
 
     # These should NOT have the query parameter in .env
     if "prepared_statement_cache_size" in direct_url:
-        logger.warning("  DIRECT_URL has prepared_statement_cache_size (should be in code only)")
+        logger.warning(
+            "  DIRECT_URL has prepared_statement_cache_size (should be in code only)"
+        )
         return False
     else:
         logger.info("  DIRECT_URL: clean (no query params in .env)")
 
     if "prepared_statement_cache_size" in pooled_url:
-        logger.warning("  POOLED_URL has prepared_statement_cache_size (should be in code only)")
+        logger.warning(
+            "  POOLED_URL has prepared_statement_cache_size (should be in code only)"
+        )
         return False
     else:
         logger.info("  POOLED_URL: clean (no query params in .env)")
@@ -128,10 +133,14 @@ def main():
             logger.info("ALL TESTS PASSED")
             logger.info("=" * 70)
             logger.info("\nConfiguration Summary:")
-            logger.info("  - Async engine (API): asyncpg with prepared_statement_cache_size=0")
+            logger.info(
+                "  - Async engine (API): asyncpg with prepared_statement_cache_size=0"
+            )
             logger.info("  - Sync engine (Worker): psycopg with prepare_threshold=None")
             logger.info("  - URL parameters: managed in code, not in .env")
-            logger.info("\nBoth engines are correctly configured for PgBouncer compatibility.")
+            logger.info(
+                "\nBoth engines are correctly configured for PgBouncer compatibility."
+            )
             return 0
         else:
             logger.error("SOME TESTS FAILED")
@@ -141,6 +150,7 @@ def main():
     except (OSError, RuntimeError, ValueError, ImportError) as e:
         logger.error(f"Test Error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

@@ -1,4 +1,5 @@
 """Tests for health check endpoint."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest

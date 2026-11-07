@@ -1,6 +1,7 @@
 """
 Alembic configuration for database migrations.
 """
+
 import asyncio
 import os
 
@@ -9,15 +10,10 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Get database URL: prefer ALEMBIC_DATABASE_URL for testing, fall back to SUPABASE_DIRECT_URL
-database_url = os.getenv(
-    "ALEMBIC_DATABASE_URL",
-    os.getenv("SUPABASE_DIRECT_URL", "")
-)
+database_url = os.getenv("ALEMBIC_DATABASE_URL", os.getenv("SUPABASE_DIRECT_URL", ""))
 
 if not database_url:
-    raise ValueError(
-        "ALEMBIC_DATABASE_URL or SUPABASE_DIRECT_URL must be set."
-    )
+    raise ValueError("ALEMBIC_DATABASE_URL or SUPABASE_DIRECT_URL must be set.")
 
 # Convert to asyncpg driver
 database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
