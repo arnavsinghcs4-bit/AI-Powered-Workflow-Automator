@@ -45,18 +45,17 @@ class Config(BaseSettings):
     def __init__(self, **data):
         super().__init__(**data)
 
-        # Validate required URLs are set
+        # Validate SUPABASE_POOLED_URL is set
         if not self.SUPABASE_POOLED_URL:
             raise ValueError(
                 "SUPABASE_POOLED_URL must be set in .env or environment. "
                 "Copy .env.example to .env and add your Supabase connection string."
             )
 
+        # If SUPABASE_DIRECT_URL is not set, use SUPABASE_POOLED_URL as fallback
+        # (useful for testing with a single test database)
         if not self.SUPABASE_DIRECT_URL:
-            raise ValueError(
-                "SUPABASE_DIRECT_URL must be set in .env or environment. "
-                "Copy .env.example to .env and add your Supabase connection string."
-            )
+            self.SUPABASE_DIRECT_URL = self.SUPABASE_POOLED_URL
 
         # Validate JWT_SECRET on startup
         if (
