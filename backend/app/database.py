@@ -1,14 +1,19 @@
 """Database configuration and session management."""
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
-from sqlalchemy import event
 
 from app.config import config
 
 # Pooled engine for API/worker (PgBouncer transaction mode)
+# Add prepared_statement_cache_size=0 to URL for asyncpg + PgBouncer compatibility
+pooled_url = config.SUPABASE_POOLED_URL.replace("postgresql://", "postgresql+asyncpg://")
+if "?" not in pooled_url:
+    pooled_url += "?prepared_statement_cache_size=0"
+else:
+    pooled_url += "&prepared_statement_cache_size=0"
+
 pooled_engine = create_async_engine(
-    config.SUPABASE_POOLED_URL.replace("postgresql://", "postgresql+asyncpg://"),
+    pooled_url,
     echo=False,
     pool_size=10,
     max_overflow=20,
