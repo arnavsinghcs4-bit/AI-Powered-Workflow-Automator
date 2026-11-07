@@ -2,11 +2,10 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
-psycopg[binary]==3.1.12
+psycopg[binary]>=3.2.0
 alembic==1.13.1
 celery[redis]==5.3.4
-redis==5.0.1
-redis-asyncio==5.0.1
+redis>=4.5.0,<5.1
 pydantic[email]==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
