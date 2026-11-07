@@ -1,7 +1,9 @@
 """Testing configuration and fixtures."""
 import os
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from httpx import AsyncClient
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()
@@ -45,6 +47,20 @@ async def db_session():
 
 @pytest.fixture
 def mock_redis():
-    """Mock Redis for testing."""
-    # Placeholder; will use fakeredis or responses library
-    pass
+    """Mock Redis for testing without needing a Redis daemon."""
+    mock = AsyncMock()
+    mock.ping = AsyncMock(return_value=True)
+    mock.get = AsyncMock(return_value=None)
+    mock.set = AsyncMock(return_value=True)
+    mock.delete = AsyncMock(return_value=True)
+    mock.close = AsyncMock(return_value=None)
+    return mock
+
+
+@pytest.fixture
+async def client():
+    """Provide an async test client for the FastAPI app."""
+    from app.main import app
+
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
