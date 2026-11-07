@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: workflow_automator_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint with ruff check
+        run: |
+          cd backend
+          ruff check .
+
+      - name: Format check with ruff format
+        run: |
+          cd backend
+          ruff format --check .
+
+      - name: Run migrations on test DB
+        env:
+          ALEMBIC_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/workflow_automator_test
+          SUPABASE_POOLED_URL: postgresql://postgres:postgres@localhost:5432/workflow_automator_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret
+          ENV: test
+        run: |
+          cd backend
+          alembic upgrade head
+
+      - name: Run tests
+        env:
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/workflow_automator_test
+          SUPABASE_POOLED_URL: postgresql://postgres:postgres@localhost:5432/workflow_automator_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret
+          ENV: test
+        run: |
+          cd backend
+          pytest -v --asyncio-mode=auto
