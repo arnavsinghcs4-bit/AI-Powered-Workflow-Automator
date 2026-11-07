@@ -1,5 +1,7 @@
 """Initial schema with 7 tables and RLS."""
 
+import os
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -9,14 +11,9 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-
-def _safe_revoke(table_name: str) -> None:
-    """Safely revoke permissions, ignoring if roles don't exist (test databases)."""
-    try:
-        op.execute(f"REVOKE ALL ON {table_name} FROM anon, authenticated;")
-    except Exception:
-        # Ignore errors for test databases that don't have these roles
-        pass
+# Only run REVOKE commands on Supabase (identified by the presence of supabase.co in URL)
+database_url = os.getenv("ALEMBIC_DATABASE_URL", os.getenv("SUPABASE_DIRECT_URL", ""))
+IS_SUPABASE = "supabase.co" in database_url
 
 
 def upgrade() -> None:
@@ -38,7 +35,8 @@ def upgrade() -> None:
     )
     op.create_index("idx_users_email", "users", ["email"])
     op.execute("ALTER TABLE users ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("users")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON users FROM anon, authenticated;")
 
     # pipelines table
     op.create_table(
@@ -58,7 +56,8 @@ def upgrade() -> None:
     )
     op.create_index("idx_pipelines_user_id", "pipelines", ["user_id"])
     op.execute("ALTER TABLE pipelines ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("pipelines")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON pipelines FROM anon, authenticated;")
 
     # pipeline_steps table
     op.create_table(
@@ -86,7 +85,8 @@ def upgrade() -> None:
     )
     op.create_index("idx_pipeline_steps_pipeline_id", "pipeline_steps", ["pipeline_id"])
     op.execute("ALTER TABLE pipeline_steps ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("pipeline_steps")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON pipeline_steps FROM anon, authenticated;")
 
     # files table
     op.create_table(
@@ -107,7 +107,8 @@ def upgrade() -> None:
     )
     op.create_index("idx_files_user_id", "files", ["user_id"])
     op.execute("ALTER TABLE files ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("files")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON files FROM anon, authenticated;")
 
     # jobs table
     op.create_table(
@@ -143,7 +144,8 @@ def upgrade() -> None:
     op.create_index("idx_jobs_status", "jobs", ["status"])
     op.create_index("idx_jobs_idempotency_key", "jobs", ["idempotency_key"])
     op.execute("ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("jobs")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON jobs FROM anon, authenticated;")
 
     # step_runs table
     op.create_table(
@@ -176,7 +178,8 @@ def upgrade() -> None:
     op.create_index("idx_step_runs_job_id", "step_runs", ["job_id"])
     op.create_index("idx_step_runs_step_id", "step_runs", ["step_id"])
     op.execute("ALTER TABLE step_runs ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("step_runs")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON step_runs FROM anon, authenticated;")
 
     # llm_calls table
     op.create_table(
@@ -202,21 +205,25 @@ def upgrade() -> None:
     )
     op.create_index("idx_llm_calls_step_run_id", "llm_calls", ["step_run_id"])
     op.execute("ALTER TABLE llm_calls ENABLE ROW LEVEL SECURITY;")
-    _safe_revoke("llm_calls")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON llm_calls FROM anon, authenticated;")
 
 
 def downgrade() -> None:
     """Drop all tables."""
-    _safe_revoke("llm_calls")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON llm_calls FROM anon, authenticated;")
     op.drop_index("idx_llm_calls_step_run_id", table_name="llm_calls")
     op.drop_table("llm_calls")
 
-    _safe_revoke("step_runs")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON step_runs FROM anon, authenticated;")
     op.drop_index("idx_step_runs_job_id", table_name="step_runs")
     op.drop_index("idx_step_runs_step_id", table_name="step_runs")
     op.drop_table("step_runs")
 
-    _safe_revoke("jobs")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON jobs FROM anon, authenticated;")
     op.drop_index("idx_jobs_user_id", table_name="jobs")
     op.drop_index("idx_jobs_pipeline_id", table_name="jobs")
     op.drop_index("idx_jobs_file_id", table_name="jobs")
@@ -224,18 +231,22 @@ def downgrade() -> None:
     op.drop_index("idx_jobs_idempotency_key", table_name="jobs")
     op.drop_table("jobs")
 
-    _safe_revoke("files")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON files FROM anon, authenticated;")
     op.drop_index("idx_files_user_id", table_name="files")
     op.drop_table("files")
 
-    _safe_revoke("pipeline_steps")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON pipeline_steps FROM anon, authenticated;")
     op.drop_index("idx_pipeline_steps_pipeline_id", table_name="pipeline_steps")
     op.drop_table("pipeline_steps")
 
-    _safe_revoke("pipelines")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON pipelines FROM anon, authenticated;")
     op.drop_index("idx_pipelines_user_id", table_name="pipelines")
     op.drop_table("pipelines")
 
-    _safe_revoke("users")
+    if IS_SUPABASE:
+        op.execute("REVOKE ALL ON users FROM anon, authenticated;")
     op.drop_index("idx_users_email", table_name="users")
     op.drop_table("users")
