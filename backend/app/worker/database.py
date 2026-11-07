@@ -1,5 +1,5 @@
 """Sync database configuration for Celery worker."""
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import QueuePool
 
 from app.config import config

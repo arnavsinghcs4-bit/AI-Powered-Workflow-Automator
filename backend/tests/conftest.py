@@ -1,9 +1,10 @@
 """Testing configuration and fixtures."""
 import os
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()

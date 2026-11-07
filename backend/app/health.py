@@ -1,12 +1,12 @@
 """Health check endpoint."""
 import logging
-from fastapi import APIRouter, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-import redis.asyncio as redis
 
-from app.database import async_session_maker
+import redis.asyncio as redis
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import text
+
 from app.config import config
+from app.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,7 +22,7 @@ async def health():
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
         db_status = "connected"
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"Health check DB failed: {e}")
 
     try:
@@ -30,7 +30,7 @@ async def health():
         await redis_client.ping()
         redis_status = "connected"
         await redis_client.close()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"Health check Redis failed: {e}")
 
     if db_status == "connected" and redis_status == "connected":

@@ -1,12 +1,10 @@
 """FastAPI application entry point."""
-import os
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import config
 from app.health import router as health_router
 
 # Configure logging

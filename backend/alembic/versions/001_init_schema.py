@@ -1,7 +1,7 @@
 """Initial schema with 7 tables and RLS."""
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "001_init_schema"
 down_revision = None

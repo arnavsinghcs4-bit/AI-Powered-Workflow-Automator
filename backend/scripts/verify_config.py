@@ -3,13 +3,13 @@
 Connection configuration test: verify async and sync engines are configured correctly.
 This test does NOT require network access - it validates the configuration structure.
 """
-import sys
 import logging
-import os
+import sys
 from pathlib import Path
 
 # Load .env and set up path
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 # Add backend to path
@@ -137,7 +137,7 @@ def main():
             logger.error("=" * 70)
             return 1
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, ImportError) as e:
         logger.error(f"Test Error: {e}")
         import traceback
         traceback.print_exc()

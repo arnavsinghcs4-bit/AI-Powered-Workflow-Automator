@@ -6,18 +6,18 @@ Tests:
 2. Sync engine with prepare_threshold=None (psycopg3 + PgBouncer)
 """
 import asyncio
-import sys
 import logging
 import os
+import sys
 from pathlib import Path
 
 # Load .env from parent directory
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import create_engine, Engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ async def test_async_connection(pooled_url: str):
         logger.info("ASYNC connection: PASSED\n")
         return True
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"ASYNC connection: FAILED - {e}\n")
         return False
 
@@ -109,7 +109,7 @@ def test_sync_connection(pooled_url: str):
         logger.info("SYNC connection: PASSED\n")
         return True
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"SYNC connection: FAILED - {e}\n")
         return False
 

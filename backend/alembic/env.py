@@ -1,11 +1,12 @@
 """
 Alembic configuration for database migrations.
 """
-import os
 import asyncio
+import os
+
 from sqlalchemy import engine_from_config, pool
+
 from alembic import context
-from alembic.config import Config
 
 # Get database URL: prefer ALEMBIC_DATABASE_URL for testing, fall back to SUPABASE_DIRECT_URL
 database_url = os.getenv(

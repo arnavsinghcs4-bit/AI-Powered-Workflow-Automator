@@ -5,17 +5,18 @@ Verifies prepared statement cache is disabled for PgBouncer compatibility.
 Reports any prepared statement errors that would occur with misconfigured asyncpg.
 """
 import asyncio
-import sys
 import logging
 import os
+import sys
 from pathlib import Path
 
 # Load .env from parent directory
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ async def test_pooler_connection(pooled_url: str, num_queries: int = 20):
                 result = await session.execute(text("SELECT :val as value"), {"val": session_id})
                 row = result.fetchone()
                 return session_id, row[0], None
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 return session_id, None, str(e)
 
     logger.info(f"Running {num_queries} concurrent queries through async pooled connection...")
