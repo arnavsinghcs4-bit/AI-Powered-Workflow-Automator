@@ -11,10 +11,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
+
 from app.config import config
 from app.database import pooled_engine
-
-load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
