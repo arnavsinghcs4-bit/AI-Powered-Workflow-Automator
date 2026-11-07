@@ -5,7 +5,7 @@ Alembic configuration for database migrations.
 import asyncio
 import os
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 
@@ -39,14 +39,16 @@ def run_migrations_offline() -> None:
 
 async def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    connectable = create_async_engine(
+        database_url,
+        echo=False,
+        poolclass=None,  # No connection pooling for migrations
     )
 
     async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
 
 
 def do_run_migrations(connection):
