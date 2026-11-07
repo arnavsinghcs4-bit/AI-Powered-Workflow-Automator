@@ -7,17 +7,20 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent.parent / ".env")
-
-from app.config import config
-from app.database import pooled_engine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+# Load .env before importing app modules
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
+
+# Add backend to path only when run as script
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.config import config
+from app.database import pooled_engine
 
 
 def test_async_config():
