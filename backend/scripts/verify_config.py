@@ -15,16 +15,14 @@ logger = logging.getLogger(__name__)
 # Load .env before importing app modules
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-# Add backend to path only when run as script
-if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from app.config import config
-from app.database import pooled_engine
+# Add backend to path for app imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def test_async_config():
     """Verify async engine configuration."""
+    from app.database import pooled_engine
+
     logger.info("=" * 70)
     logger.info("Testing ASYNC Engine Configuration (API)")
     logger.info("=" * 70)
@@ -83,6 +81,8 @@ def test_sync_config():
 
 def test_url_params():
     """Verify URLs do not have prepared_statement_cache_size in .env."""
+    from app.config import config
+
     logger.info("=" * 70)
     logger.info("Testing URL Parameters in .env")
     logger.info("=" * 70)
