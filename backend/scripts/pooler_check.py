@@ -10,13 +10,11 @@ import os
 import sys
 from pathlib import Path
 
-# Load .env from parent directory
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent.parent / ".env")
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

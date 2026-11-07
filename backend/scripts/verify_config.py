@@ -7,7 +7,6 @@ import logging
 import sys
 from pathlib import Path
 
-# Load .env and set up path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
