@@ -64,9 +64,10 @@ class Config(BaseSettings):
         if not self.SUPABASE_DIRECT_URL:
             self.SUPABASE_DIRECT_URL = self.SUPABASE_POOLED_URL
 
-        # Validate JWT_SECRET on startup
+        # Validate JWT_SECRET on startup (skip in dev/test/ci)
+        is_production = self.ENV not in ("dev", "test", "ci")
         if (
-            self.ENV != "dev"
+            is_production
             and self.JWT_SECRET == "your-secret-key-change-me-in-production"
         ):
             raise ValueError(
@@ -74,8 +75,8 @@ class Config(BaseSettings):
                 "Set ENV=dev to allow the placeholder, or provide a real JWT_SECRET."
             )
 
-        # Validate JWT_SECRET length in production
-        if self.ENV != "dev" and len(self.JWT_SECRET) < 32:
+        # Validate JWT_SECRET length in production only
+        if is_production and len(self.JWT_SECRET) < 32:
             raise ValueError(
                 "JWT_SECRET must be at least 32 characters long in production. "
                 "Generate a secure key and set JWT_SECRET in your environment."
