@@ -21,12 +21,12 @@ def override_config(monkeypatch):
 
 
 @pytest.fixture
-async def client(clean_db, override_config):
+async def client(db_session, override_config):
     """Create test client with dependency overrides."""
     from app.database import get_session
 
     async def override_get_session():
-        return clean_db
+        return db_session
 
     app.dependency_overrides[get_session] = override_get_session
     async with AsyncClient(app=app, base_url="http://test") as ac:

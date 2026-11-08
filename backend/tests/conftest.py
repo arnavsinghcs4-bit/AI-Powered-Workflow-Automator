@@ -28,10 +28,11 @@ if not is_safe or "supabase.co" in test_url:
         f"Never point to a Supabase project."
     )
 
-# Create test engine
+# Create test engine with pool pre-ping to detect stale connections
 test_engine = create_async_engine(
     test_url.replace("postgresql://", "postgresql+asyncpg://"),
     echo=False,
+    pool_pre_ping=True,
 )
 
 TestAsyncSessionMaker = async_sessionmaker(
@@ -43,22 +44,14 @@ TestAsyncSessionMaker = async_sessionmaker(
 
 @pytest.fixture
 async def db_session():
-    """Provide a test database session with per-test isolation."""
+    """Provide a test database session, cleaned before each test."""
     async with TestAsyncSessionMaker() as session:
-        yield session
-    # Session context closed; asyncpg connection is released
-
-
-@pytest.fixture
-async def clean_db():
-    """Clean test database before each test."""
-    async with TestAsyncSessionMaker() as session:
-        await session.execute(text("DELETE FROM refresh_tokens"))
-        await session.execute(text("DELETE FROM users"))
+        # Clean tables at start of test
+        await session.execute(text("DELETE FROM refresh_tokens CASCADE"))
+        await session.execute(text("DELETE FROM users CASCADE"))
         await session.commit()
-    # Yield a fresh session for the test
-    async with TestAsyncSessionMaker() as session:
         yield session
+        # No cleanup after — next test will clean again
 
 
 @pytest.fixture
