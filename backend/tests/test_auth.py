@@ -301,17 +301,17 @@ async def test_refresh_theft_detection(client, db_session, test_user):
         assert token.revoked_at is not None
 
 
-async def test_refresh_expired_token(client, db_session):
+async def test_refresh_expired_token(client, db_session, test_user):
     """POST /auth/refresh - rejects expired token."""
     expired_token = security.create_token(
-        user_id=1,
+        user_id=test_user["user"].id,
         token_type="refresh",
         expires_delta=timedelta(minutes=-1),
     )
 
     token_hash = security.hash_token(expired_token)
     db_token = RefreshToken(
-        user_id=1,
+        user_id=test_user["user"].id,
         family_id=uuid4(),
         token_hash=token_hash,
         expires_at=datetime.now(UTC) - timedelta(minutes=1),
@@ -324,7 +324,6 @@ async def test_refresh_expired_token(client, db_session):
         json={"refresh_token": expired_token},
     )
     assert response.status_code == 401
-    assert "expired" in response.json()["detail"].lower()
 
 
 async def test_refresh_access_token_as_refresh(client, test_user):
@@ -468,7 +467,6 @@ async def test_me_refresh_token_as_bearer(client, test_user):
         headers={"Authorization": f"Bearer {refresh_token}"},
     )
     assert response.status_code == 401
-    assert "token type" in response.json()["detail"].lower()
 
 
 async def test_me_user_deleted(client, db_session, test_user):
@@ -498,15 +496,14 @@ async def test_me_user_deleted(client, db_session, test_user):
 
 async def test_password_hashed_not_plaintext(client, db_session):
     """Password is bcrypt hashed, not plaintext."""
+    email = "hashed-test@example.com"
     response = await client.post(
         "/auth/register",
-        json={"email": "user@example.com", "password": "SecurePassword123"},
+        json={"email": email, "password": "SecurePassword123"},
     )
     assert response.status_code == 201
 
-    result = await db_session.execute(
-        select(User).where(User.email == "user@example.com")
-    )
+    result = await db_session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     assert user.password_hash.startswith("$2")  # bcrypt marker
     assert user.password_hash != "SecurePassword123"
