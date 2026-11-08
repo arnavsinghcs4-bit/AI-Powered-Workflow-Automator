@@ -37,8 +37,11 @@ async def client(db_session, override_config):
 @pytest.fixture
 async def clean_db(db_session):
     """Clean test database."""
-    await db_session.execute(text("DELETE FROM refresh_tokens CASCADE"))
-    await db_session.execute(text("DELETE FROM users CASCADE"))
+    # Start a fresh transaction for this test
+    await db_session.rollback()
+    # Clear tables in dependency order
+    await db_session.execute(text("DELETE FROM refresh_tokens"))
+    await db_session.execute(text("DELETE FROM users"))
     await db_session.commit()
     yield db_session
 

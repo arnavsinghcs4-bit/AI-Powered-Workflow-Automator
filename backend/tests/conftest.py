@@ -42,9 +42,10 @@ TestAsyncSessionMaker = async_sessionmaker(
 
 @pytest.fixture
 async def db_session():
-    """Provide a test database session."""
+    """Provide a test database session with per-test isolation."""
     async with TestAsyncSessionMaker() as session:
         yield session
+        await session.rollback()
 
 
 @pytest.fixture
