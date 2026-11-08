@@ -2,11 +2,21 @@
 
 import os
 from unittest.mock import AsyncMock
+from urllib.parse import urlparse
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool
+
+# Set test environment BEFORE any app imports
+os.environ.setdefault("ENABLE_RATE_LIMITING", "false")
+os.environ.setdefault("JWT_SECRET", "test-secret-key-at-least-32-characters-long-12345")
+os.environ.setdefault("ENV", "test")
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()
@@ -17,41 +27,52 @@ if not test_url:
         "Use localhost, 127.0.0.1, or a CI service hostname (e.g., postgres:5432)."
     )
 
-# Allowlist of safe test database hosts
-allowed_hosts = ("localhost", "127.0.0.1", "postgres", "postgres:5432")
-is_safe = any(host in test_url for host in allowed_hosts)
+# Validate safe test database hosts using urlparse
+parsed = urlparse(
+    test_url if test_url.startswith("postgresql://") else f"postgresql://{test_url}"
+)
+allowed_hosts = ("localhost", "127.0.0.1", "postgres")
+hostname = parsed.hostname or ""
 
-if not is_safe or "supabase.co" in test_url:
+is_safe = (
+    any(hostname.startswith(host) for host in allowed_hosts)
+    and "supabase.co" not in test_url
+)
+
+if not is_safe:
     raise ValueError(
-        f"DATABASE_TEST_URL points to an unsafe host: {test_url}. "
+        f"DATABASE_TEST_URL points to an unsafe host: {hostname}. "
         f"Must be one of: {', '.join(allowed_hosts)}. "
         f"Never point to a Supabase project."
     )
 
-# Create test engine with pooling disabled to prevent connection state corruption
-test_engine = create_async_engine(
-    test_url.replace("postgresql://", "postgresql+asyncpg://"),
-    echo=False,
-    poolclass=None,  # Disable connection pooling in tests
-)
-
-TestAsyncSessionMaker = async_sessionmaker(
-    test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
-
 
 @pytest.fixture
 async def db_session():
-    """Provide a test database session, cleaned before each test."""
-    async with TestAsyncSessionMaker() as session:
-        # Clean tables at start of test
-        await session.execute(text("DELETE FROM refresh_tokens CASCADE"))
-        await session.execute(text("DELETE FROM users CASCADE"))
-        await session.commit()
-        yield session
-        # No cleanup after — next test will clean again
+    """Provide a test database session with fresh engine and no pooling.
+
+    Creates a new engine per test to avoid event loop conflicts.
+    Uses NullPool to prevent connection reuse across tests.
+    """
+    # Create fresh engine inside fixture to avoid event loop issues
+    engine = create_async_engine(
+        test_url.replace("postgresql://", "postgresql+asyncpg://"),
+        echo=False,
+        poolclass=NullPool,  # No connection pooling in tests
+    )
+
+    try:
+        async_session_maker = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+        async with async_session_maker() as session:
+            yield session
+    finally:
+        # Dispose all connections (async in newer SQLAlchemy)
+        await engine.dispose()
 
 
 @pytest.fixture

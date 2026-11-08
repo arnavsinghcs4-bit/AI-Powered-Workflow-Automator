@@ -1,9 +1,9 @@
 """Authentication integration tests - focused on core Phase 2 endpoints."""
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
 
@@ -13,15 +13,7 @@ from app.models import RefreshToken, User
 
 
 @pytest.fixture
-def override_config(monkeypatch):
-    """Override config for tests."""
-    monkeypatch.setenv("ENABLE_RATE_LIMITING", "false")
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-at-least-32-characters-long-1234")
-    monkeypatch.setenv("ENV", "test")
-
-
-@pytest.fixture
-async def client(db_session, override_config):
+async def client(db_session):
     """Create test client with dependency overrides."""
     from app.database import get_session
 
@@ -35,15 +27,15 @@ async def client(db_session, override_config):
 
 
 @pytest.fixture
-async def test_user(clean_db):
+async def test_user(db_session):
     """Create a test user."""
     email = "test@example.com"
     password = "SecurePassword123"
     hashed = await security.hash_password(password)
     user = User(email=email, password_hash=hashed)
-    clean_db.add(user)
-    await clean_db.commit()
-    await clean_db.refresh(user)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
     return {"user": user, "password": password, "email": email}
 
 
@@ -52,7 +44,7 @@ async def test_user(clean_db):
 # ============================================================================
 
 
-async def test_register_success(client, clean_db):
+async def test_register_success(client, db_session):
     """POST /auth/register - successful registration."""
     response = await client.post(
         "/auth/register",
@@ -83,7 +75,7 @@ async def test_register_duplicate_email_case_insensitive(client, test_user):
     assert response.status_code == 409
 
 
-async def test_register_invalid_email(client, clean_db):
+async def test_register_invalid_email(client, db_session):
     """POST /auth/register - rejects invalid email."""
     response = await client.post(
         "/auth/register",
@@ -92,7 +84,7 @@ async def test_register_invalid_email(client, clean_db):
     assert response.status_code == 422
 
 
-async def test_register_short_password(client, clean_db):
+async def test_register_short_password(client, db_session):
     """POST /auth/register - rejects password < 10 chars."""
     response = await client.post(
         "/auth/register",
@@ -101,7 +93,7 @@ async def test_register_short_password(client, clean_db):
     assert response.status_code == 422
 
 
-async def test_register_long_password(client, clean_db):
+async def test_register_long_password(client, db_session):
     """POST /auth/register - rejects password > 128 chars."""
     response = await client.post(
         "/auth/register",
@@ -110,7 +102,7 @@ async def test_register_long_password(client, clean_db):
     assert response.status_code == 422
 
 
-async def test_register_password_not_returned(client, clean_db):
+async def test_register_password_not_returned(client, db_session):
     """POST /auth/register - password never in response."""
     response = await client.post(
         "/auth/register",
@@ -150,7 +142,7 @@ async def test_login_wrong_password(client, test_user):
     assert "incorrect" in response.json()["detail"].lower()
 
 
-async def test_login_unknown_email(client, clean_db):
+async def test_login_unknown_email(client, db_session):
     """POST /auth/login - rejects unknown email."""
     response = await client.post(
         "/auth/login",
@@ -189,7 +181,7 @@ async def test_login_token_claims(client, test_user):
     assert refresh_payload["sub"] == str(test_user["user"].id)
 
 
-async def test_login_creates_refresh_token_entry(client, clean_db, test_user):
+async def test_login_creates_refresh_token_entry(client, db_session, test_user):
     """POST /auth/login - creates refresh_tokens DB entry."""
     response = await client.post(
         "/auth/login",
@@ -198,7 +190,7 @@ async def test_login_creates_refresh_token_entry(client, clean_db, test_user):
     data = response.json()
 
     token_hash = security.hash_token(data["refresh_token"])
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
     db_token = result.scalar_one_or_none()
@@ -249,7 +241,7 @@ async def test_refresh_rotation_revokes_old(client, test_user):
     assert response.status_code == 401
 
 
-async def test_refresh_maintains_family(client, clean_db, test_user):
+async def test_refresh_maintains_family(client, db_session, test_user):
     """POST /auth/refresh - maintains same family_id across rotations."""
     login = await client.post(
         "/auth/login",
@@ -258,7 +250,7 @@ async def test_refresh_maintains_family(client, clean_db, test_user):
     token1 = login.json()["refresh_token"]
 
     hash1 = security.hash_token(token1)
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(RefreshToken).where(RefreshToken.token_hash == hash1)
     )
     family_id = result.scalar_one_or_none().family_id
@@ -267,13 +259,13 @@ async def test_refresh_maintains_family(client, clean_db, test_user):
     token2 = refresh1.json()["refresh_token"]
 
     hash2 = security.hash_token(token2)
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(RefreshToken).where(RefreshToken.token_hash == hash2)
     )
     assert result.scalar_one_or_none().family_id == family_id
 
 
-async def test_refresh_theft_detection(client, clean_db, test_user):
+async def test_refresh_theft_detection(client, db_session, test_user):
     """POST /auth/refresh - reusing revoked token revokes entire family."""
     login = await client.post(
         "/auth/login",
@@ -282,7 +274,7 @@ async def test_refresh_theft_detection(client, clean_db, test_user):
     token1 = login.json()["refresh_token"]
 
     hash1 = security.hash_token(token1)
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(RefreshToken).where(RefreshToken.token_hash == hash1)
     )
     family_id = result.scalar_one_or_none().family_id
@@ -302,14 +294,14 @@ async def test_refresh_theft_detection(client, clean_db, test_user):
     assert "reuse detected" in response.json()["detail"].lower()
 
     # All tokens in family should be revoked
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(RefreshToken).where(RefreshToken.family_id == family_id)
     )
     for token in result.scalars().all():
         assert token.revoked_at is not None
 
 
-async def test_refresh_expired_token(client, clean_db):
+async def test_refresh_expired_token(client, db_session):
     """POST /auth/refresh - rejects expired token."""
     expired_token = security.create_token(
         user_id=1,
@@ -322,10 +314,10 @@ async def test_refresh_expired_token(client, clean_db):
         user_id=1,
         family_id=uuid4(),
         token_hash=token_hash,
-        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
-    clean_db.add(db_token)
-    await clean_db.commit()
+    db_session.add(db_token)
+    await db_session.commit()
 
     response = await client.post(
         "/auth/refresh",
@@ -350,7 +342,7 @@ async def test_refresh_access_token_as_refresh(client, test_user):
     assert response.status_code == 401
 
 
-async def test_refresh_tampered_token(client, clean_db):
+async def test_refresh_tampered_token(client, db_session):
     """POST /auth/refresh - rejects tampered token."""
     valid_token = security.create_token(
         user_id=1,
@@ -442,13 +434,13 @@ async def test_me_success(client, test_user):
     assert "password_hash" not in data
 
 
-async def test_me_no_token(client, clean_db):
+async def test_me_no_token(client, db_session):
     """GET /auth/me - rejects missing token."""
     response = await client.get("/auth/me")
     assert response.status_code == 403
 
 
-async def test_me_expired_token(client, clean_db):
+async def test_me_expired_token(client, db_session):
     """GET /auth/me - rejects expired token."""
     expired_token = security.create_token(
         user_id=1,
@@ -479,7 +471,7 @@ async def test_me_refresh_token_as_bearer(client, test_user):
     assert "token type" in response.json()["detail"].lower()
 
 
-async def test_me_user_deleted(client, clean_db, test_user):
+async def test_me_user_deleted(client, db_session, test_user):
     """GET /auth/me - returns 401 if user deleted."""
     login = await client.post(
         "/auth/login",
@@ -487,10 +479,10 @@ async def test_me_user_deleted(client, clean_db, test_user):
     )
     access_token = login.json()["access_token"]
 
-    await clean_db.execute(
+    await db_session.execute(
         text("DELETE FROM users WHERE id = :user_id"), {"user_id": test_user["user"].id}
     )
-    await clean_db.commit()
+    await db_session.commit()
 
     response = await client.get(
         "/auth/me",
@@ -504,7 +496,7 @@ async def test_me_user_deleted(client, clean_db, test_user):
 # ============================================================================
 
 
-async def test_password_hashed_not_plaintext(client, clean_db):
+async def test_password_hashed_not_plaintext(client, db_session):
     """Password is bcrypt hashed, not plaintext."""
     response = await client.post(
         "/auth/register",
@@ -512,7 +504,7 @@ async def test_password_hashed_not_plaintext(client, clean_db):
     )
     assert response.status_code == 201
 
-    result = await clean_db.execute(
+    result = await db_session.execute(
         select(User).where(User.email == "user@example.com")
     )
     user = result.scalar_one_or_none()
@@ -520,7 +512,7 @@ async def test_password_hashed_not_plaintext(client, clean_db):
     assert user.password_hash != "SecurePassword123"
 
 
-async def test_password_never_in_responses(client, clean_db, test_user):
+async def test_password_never_in_responses(client, db_session, test_user):
     """Password and password_hash never in API responses."""
     # Login
     login = await client.post(
