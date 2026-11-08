@@ -5,6 +5,7 @@ import logging
 import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import config
 from app.database import async_session_maker
@@ -23,8 +24,10 @@ async def health():
         async with async_session_maker() as session:
             await session.execute(text("SELECT 1"))
         db_status = "connected"
-    except (OSError, RuntimeError) as e:
+    except (OSError, RuntimeError, SQLAlchemyError) as e:
         logger.error(f"Health check DB failed: {e}")
+    except Exception as e:
+        logger.error(f"Health check DB failed with unexpected error: {e}")
 
     try:
         redis_client = redis.from_url(config.REDIS_URL)
@@ -33,6 +36,8 @@ async def health():
         await redis_client.close()
     except (OSError, RuntimeError) as e:
         logger.error(f"Health check Redis failed: {e}")
+    except Exception as e:
+        logger.error(f"Health check Redis failed with unexpected error: {e}")
 
     if db_status == "connected" and redis_status == "connected":
         return {"status": "ok", "db": "connected", "redis": "connected"}
