@@ -38,6 +38,13 @@ class Config(BaseSettings):
 
     # Auth
     JWT_SECRET: str = "your-secret-key-change-me-in-production"
+    JWT_ACCESS_TOKEN_LIFETIME: int = 15  # minutes
+    JWT_REFRESH_TOKEN_LIFETIME: int = 7  # days
+
+    # Rate limiting
+    RATE_LIMIT_LOGIN: int = 5  # per minute
+    RATE_LIMIT_REGISTER: int = 3  # per minute
+    ENABLE_RATE_LIMITING: bool = True
 
     # Environment
     ENV: str = "dev"
@@ -65,6 +72,13 @@ class Config(BaseSettings):
             raise ValueError(
                 "JWT_SECRET must be changed from the placeholder value in production. "
                 "Set ENV=dev to allow the placeholder, or provide a real JWT_SECRET."
+            )
+
+        # Validate JWT_SECRET length in production
+        if self.ENV != "dev" and len(self.JWT_SECRET) < 32:
+            raise ValueError(
+                "JWT_SECRET must be at least 32 characters long in production. "
+                "Generate a secure key and set JWT_SECRET in your environment."
             )
 
     class Config:

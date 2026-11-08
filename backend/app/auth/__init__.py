@@ -1,2 +1,3 @@
-"""Placeholder route modules."""
-# Phase 2+: Auth routes
+from app.auth.routes import router
+
+__all__ = ["router"]

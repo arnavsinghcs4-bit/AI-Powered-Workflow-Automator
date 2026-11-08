@@ -66,6 +66,14 @@ A Zapier-like platform where users build visual pipelines and LLM steps process 
 - Health check endpoint
 - CI with lint + tests
 
+### Phase 2: Authentication
+- JWT-based authentication (access + refresh tokens)
+- Secure password hashing: SHA-256 + base64 + bcrypt (no 72-byte limit), run in threadpool
+- Token rotation with theft detection (revokes entire token family on reuse)
+- Rate limiting via slowapi with Redis backend
+- Endpoints: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`
+- **Known Trade-off:** Access tokens cannot be revoked and stay valid until they expire (up to 15 minutes) even after logout. Refresh tokens are revoked immediately.
+
 ### Database Schema
 
 **7 Tables:**
@@ -117,7 +125,7 @@ Safety guard aborts pytest if `DATABASE_TEST_URL` is empty or contains `supabase
 
 ## Next Phases
 
-- **Phase 2:** Auth (register, login, refresh)
+- **Phase 2 (Current):** Auth (register, login, refresh)
 - **Phase 3:** Pipelines CRUD + file upload
 - **Phase 4:** Celery job execution
 - **Phase 5:** LLM extraction with validation + retries
