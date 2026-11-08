@@ -6,9 +6,8 @@ from uuid import uuid4
 
 from httpx import AsyncClient
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import security, service
+from app.auth import security
 from app.main import app
 from app.models import RefreshToken, User
 
