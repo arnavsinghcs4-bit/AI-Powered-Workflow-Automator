@@ -60,6 +60,7 @@ async def test_user(clean_db):
 # REGISTER TESTS
 # ============================================================================
 
+
 async def test_register_success(client, clean_db):
     """POST /auth/register - successful registration."""
     response = await client.post(
@@ -131,6 +132,7 @@ async def test_register_password_not_returned(client, clean_db):
 # ============================================================================
 # LOGIN TESTS
 # ============================================================================
+
 
 async def test_login_success(client, test_user):
     """POST /auth/login - successful login."""
@@ -217,6 +219,7 @@ async def test_login_creates_refresh_token_entry(client, clean_db, test_user):
 # ============================================================================
 # REFRESH TESTS
 # ============================================================================
+
 
 async def test_refresh_success(client, test_user):
     """POST /auth/refresh - refreshes tokens successfully."""
@@ -376,6 +379,7 @@ async def test_refresh_tampered_token(client, clean_db):
 # LOGOUT TESTS
 # ============================================================================
 
+
 async def test_logout_success(client, test_user):
     """POST /auth/logout - successful logout."""
     login = await client.post(
@@ -426,6 +430,7 @@ async def test_logout_idempotent(client, test_user):
 # ============================================================================
 # /AUTH/ME TESTS
 # ============================================================================
+
 
 async def test_me_success(client, test_user):
     """GET /auth/me - returns current user."""
@@ -492,8 +497,7 @@ async def test_me_user_deleted(client, clean_db, test_user):
     access_token = login.json()["access_token"]
 
     await clean_db.execute(
-        text("DELETE FROM users WHERE id = :user_id"),
-        {"user_id": test_user["user"].id}
+        text("DELETE FROM users WHERE id = :user_id"), {"user_id": test_user["user"].id}
     )
     await clean_db.commit()
 
@@ -507,6 +511,7 @@ async def test_me_user_deleted(client, clean_db, test_user):
 # ============================================================================
 # SECURITY PROPERTY TESTS
 # ============================================================================
+
 
 async def test_password_hashed_not_plaintext(client, clean_db):
     """Password is bcrypt hashed, not plaintext."""

@@ -44,7 +44,6 @@ class User(Base):
     )
 
 
-
 class Pipeline(Base):
     """Pipeline model."""
 
