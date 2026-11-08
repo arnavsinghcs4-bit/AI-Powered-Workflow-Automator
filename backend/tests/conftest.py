@@ -28,11 +28,11 @@ if not is_safe or "supabase.co" in test_url:
         f"Never point to a Supabase project."
     )
 
-# Create test engine with pool pre-ping to detect stale connections
+# Create test engine with pooling disabled to prevent connection state corruption
 test_engine = create_async_engine(
     test_url.replace("postgresql://", "postgresql+asyncpg://"),
     echo=False,
-    pool_pre_ping=True,
+    poolclass=None,  # Disable connection pooling in tests
 )
 
 TestAsyncSessionMaker = async_sessionmaker(
