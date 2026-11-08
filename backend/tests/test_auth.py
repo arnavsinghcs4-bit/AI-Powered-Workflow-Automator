@@ -21,29 +21,17 @@ def override_config(monkeypatch):
 
 
 @pytest.fixture
-async def client(db_session, override_config):
+async def client(clean_db, override_config):
     """Create test client with dependency overrides."""
     from app.database import get_session
 
     async def override_get_session():
-        return db_session
+        return clean_db
 
     app.dependency_overrides[get_session] = override_get_session
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
-
-
-@pytest.fixture
-async def clean_db(db_session):
-    """Clean test database."""
-    # Start a fresh transaction for this test
-    await db_session.rollback()
-    # Clear tables in dependency order
-    await db_session.execute(text("DELETE FROM refresh_tokens"))
-    await db_session.execute(text("DELETE FROM users"))
-    await db_session.commit()
-    yield db_session
 
 
 @pytest.fixture

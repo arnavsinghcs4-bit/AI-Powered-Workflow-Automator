@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
@@ -45,7 +46,19 @@ async def db_session():
     """Provide a test database session with per-test isolation."""
     async with TestAsyncSessionMaker() as session:
         yield session
-        await session.rollback()
+    # Session context closed; asyncpg connection is released
+
+
+@pytest.fixture
+async def clean_db():
+    """Clean test database before each test."""
+    async with TestAsyncSessionMaker() as session:
+        await session.execute(text("DELETE FROM refresh_tokens"))
+        await session.execute(text("DELETE FROM users"))
+        await session.commit()
+    # Yield a fresh session for the test
+    async with TestAsyncSessionMaker() as session:
+        yield session
 
 
 @pytest.fixture
