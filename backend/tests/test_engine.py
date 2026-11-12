@@ -1,8 +1,7 @@
 """Worker execution engine integration tests - Phase 3 Celery tasks."""
 
-import asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -11,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 from app.pipelines.models import Pipeline, PipelineVersion, Run, StepRun
 from app.worker.tasks import submit_run
-from app.auth import security
 
 
 @pytest.fixture
@@ -283,7 +281,6 @@ class TestSubmitRunTask:
     async def test_submit_run_double_delivery(self, db_session: AsyncSession, pending_run: dict):
         """Test idempotent re-delivery: submitting same run twice."""
         run = pending_run["run"]
-        step_run = pending_run["step_run"]
         version = pending_run["version"]
 
         mock_factory, call_count = self._make_mock_client([{"status": 200, "body": '{"ok": true}'}])

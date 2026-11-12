@@ -1,9 +1,6 @@
 """Pipeline API integration tests - Phase 3 endpoints."""
 
 import pytest
-from httpx import AsyncClient
-
-from app.auth import security
 
 
 @pytest.fixture
@@ -19,15 +16,14 @@ async def auth_client(client, test_user):
 
 
 @pytest.fixture
-async def auth_client2(db_session):
+async def auth_client2(db_session, client):
     """Second authenticated test client for cross-user isolation tests."""
     from app.database import get_session
     from app.main import app
     from httpx import AsyncClient
-    from app.auth import security
 
     # Create second user
-    user = await client.post(
+    await client.post(
         "/auth/register",
         json={"email": "user2@test.com", "password": "SecurePassword123"},
     )
@@ -253,7 +249,7 @@ class TestPipelineRun:
                 "definition": {"nodes": [{"id": "a", "type": "http_request", "config": {"url": "http://a.com"}}]},
             },
         )
-        v1_id = v1_resp.json()["id"]
+        _v1_id = v1_resp.json()["id"]
 
         # Create v2
         v2_resp = await auth_client.post(
@@ -295,7 +291,7 @@ class TestPipelineRun:
                 "definition": {"nodes": [{"id": "b", "type": "http_request", "config": {"url": "http://b.com"}}]},
             },
         )
-        v2_id = v2_resp.json()["id"]
+        _v2_id = v2_resp.json()["id"]
 
         # Run with explicit v1
         response = await auth_client.post(
