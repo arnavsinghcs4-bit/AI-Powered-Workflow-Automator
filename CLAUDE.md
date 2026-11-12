@@ -215,3 +215,5 @@ Environment variables passed at container runtime or via `.env` in deployment.
 - For security: Use `/security-review`
 - For code quality: Use `/code-review high`
 - For understanding existing code: Use `/graphify`
+
+Never report a file as written, edited or deleted unless you verified it in this session with a tool call (ls, Read, git status). When resuming after a restart, re-verify every claim in the ledger against the disk before continuing, and correct the ledger where it's wrong.
