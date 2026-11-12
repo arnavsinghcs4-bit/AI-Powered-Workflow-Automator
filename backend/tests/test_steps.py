@@ -230,6 +230,7 @@ def test_http_request_ssrf_error_fails_fast():
 
             async def request(self, method, url, headers=None, json=None):
                 from app.steps.ssrf import SsrfError
+
                 raise SsrfError("blocked IP")
 
         return MockClient()

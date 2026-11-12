@@ -105,26 +105,36 @@ The `.pre-commit-config.yaml` is already configured with ruff checks.
 
 ## Workflow by Phase
 
-### Phase 1 (Complete: Infrastructure)
-- ✅ Project scaffold and Docker setup
-- ✅ Database schema with RLS and migrations
-- ✅ Health check and CI/CD pipeline
-- ✅ Formatting and linting
+## Current status
+Phases 1-2 complete. Phase 3 (pipeline execution engine) in progress on a feature branch. See docs/phase3.md.
 
-### Phase 2 (Next: Authentication)
-**Before starting**:
-1. Run `/superpowers:brainstorming` to finalize auth design (JWT claims, refresh token strategy, password hashing)
-2. Load `/security-review` to validate approach against OWASP guidelines
-3. Create TDD test suite for auth endpoints
+## Working rules
+- Once a plan is approved, execute the whole task list without pausing. Stop only for: destructive actions on a real database, a test still failing after two fix attempts, or a spec/codebase contradiction.
+- Explicit user instructions override plugin workflow gates (brainstorming, VibeWise, etc.).
+- For multi-step work, create a task list first. Include docs as deliverables. Mark done only after verifying.
+- Never report a file as written, edited or deleted unless verified this session (ls, Read, git status). After a restart, re-verify the ledger against disk.
+- Final summaries must list tests executed vs. written-but-unexecuted.
 
-**During implementation**:
-- Use `/code-review high` on auth routes and token generation
-- Test database migrations for new user tables
-- Verify JWT validation middleware
+## Safety
+- Never run tests against Supabase; never loosen the DATABASE_TEST_URL guard.
+- Flag any migration that drops tables before running it anywhere but a throwaway DB. Never edit an applied migration.
+- Never read or print .env. Never log or persist secrets.
+- Work on a branch, small commits, never commit to main, don't push unless asked.
 
-**After completion**:
-- Full `/code-review high --fix` on all auth code
-- Run `/security-review` on the complete auth system
+## Environment
+Shell is Windows PowerShell 5.1: use `;` not `&&`. Activate venv with .\.venv\Scripts\Activate.ps1. Run Python and pytest from backend/.
+
+## Architecture decisions
+- Linear pipelines only (JSONB graph definition, React Flow compatible).
+- Run claim is atomic: UPDATE ... WHERE status='pending' RETURNING; claimed_at lease for stale recovery.
+- Worker uses the sync engine and runs outside RLS; API enforces owner scoping and returns 404 for other users' resources.
+- Status/trigger columns are VARCHAR, not native enums.
+- http_request: SSRF protection pins the validated IP and re-validates every redirect hop.
+
+## Plugin triggers (explicit, not automatic)
+- /security-review: before committing auth, secrets, RLS or SSRF changes.
+- /code-review: before opening a PR. Review the diff after any --fix.
+- /graphify: for architecture questions; run `graphify update .` after large changes.
 
 ## File Organization
 
@@ -217,3 +227,8 @@ Environment variables passed at container runtime or via `.env` in deployment.
 - For understanding existing code: Use `/graphify`
 
 Never report a file as written, edited or deleted unless you verified it in this session with a tool call (ls, Read, git status). When resuming after a restart, re-verify every claim in the ledger against the disk before continuing, and correct the ledger where it's wrong.
+
+## Installed plugins
+- claude-mem: provides cross-session memory automatically. At the start of a task, check it (mem-search) for prior decisions on that area before asking me to repeat them. Never store secrets, .env contents or DB URLs in memory.
+- graphify: for architecture or "how does X connect to Y" questions, query the graph first (read graphify-out/GRAPH_REPORT.md), then read files. Run `graphify update .` after large changes or new modules.
+- VibeWise: applies only when I say "teach me" or "walk me through" (or: applies to all work, pick one). It must not block approved tasks or file writes.

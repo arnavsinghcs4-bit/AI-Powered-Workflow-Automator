@@ -24,11 +24,13 @@ class StepContext:
     variables: dict[str, Any] = field(default_factory=dict)
     secrets: dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class StepResult:
     outcome: StepOutcome
     output: dict[str, Any] | None = None
     error: str | None = None
+
 
 @dataclass
 class Step:

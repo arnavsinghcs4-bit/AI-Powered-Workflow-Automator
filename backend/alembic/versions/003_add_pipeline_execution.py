@@ -167,9 +167,7 @@ def upgrade() -> None:
         # re-claim. Stale-run recovery keys off this, NOT off status alone,
         # because a crashed run stays status='running' forever.
         sa.Column("claimed_at", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["pipeline_id"], ["pipelines.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["pipeline_id"], ["pipelines.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["version_id"],
             ["pipeline_versions.id"],
@@ -269,7 +267,9 @@ def downgrade() -> None:
         table_name="pipelines",
         if_exists=True,
     )
-    op.drop_constraint("fk_pipelines_current_version_id", "pipelines", type_="foreignkey")
+    op.drop_constraint(
+        "fk_pipelines_current_version_id", "pipelines", type_="foreignkey"
+    )
     op.drop_index("idx_pipelines_user_id", table_name="pipelines", if_exists=True)
     op.execute("ALTER TABLE pipelines DISABLE ROW LEVEL SECURITY;")
     if IS_SUPABASE:

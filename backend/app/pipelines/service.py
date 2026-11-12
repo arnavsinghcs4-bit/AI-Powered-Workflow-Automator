@@ -79,9 +79,7 @@ async def get_pipeline(
 ) -> PipelineInDB | None:
     """Return the pipeline row if it belongs to *user_id*, else None."""
     result = await db.execute(
-        select(Pipeline).where(
-            Pipeline.id == pipeline_id, Pipeline.user_id == user_id
-        )
+        select(Pipeline).where(Pipeline.id == pipeline_id, Pipeline.user_id == user_id)
     )
     row = result.scalar_one_or_none()
     if row is None:
@@ -103,9 +101,7 @@ async def list_pipelines(
     user_id: int,
 ) -> list[PipelineInDB]:
     """Return all pipelines owned by *user_id*."""
-    result = await db.execute(
-        select(Pipeline).where(Pipeline.user_id == user_id)
-    )
+    result = await db.execute(select(Pipeline).where(Pipeline.user_id == user_id))
     rows = result.scalars().all()
     return [
         PipelineInDB(
@@ -129,9 +125,9 @@ async def list_versions(
 ) -> list[PipelineVersionInDB]:
     """Return versions for this pipeline (user-scoped)."""
     result = await db.execute(
-        select(PipelineVersion).where(
-            PipelineVersion.pipeline_id == pipeline_id
-        ).order_by(PipelineVersion.version_number.desc())
+        select(PipelineVersion)
+        .where(PipelineVersion.pipeline_id == pipeline_id)
+        .order_by(PipelineVersion.version_number.desc())
     )
     rows = result.scalars().all()
     return [

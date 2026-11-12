@@ -24,7 +24,12 @@ from app.pipelines.schemas import (
     TaskCreate,
     TaskResponse,
 )
-from app.pipelines.service import create_pipeline, get_pipeline, list_pipelines, trigger_run
+from app.pipelines.service import (
+    create_pipeline,
+    get_pipeline,
+    list_pipelines,
+    trigger_run,
+)
 from app.pipelines import service
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -37,6 +42,7 @@ limiter = Limiter(
 
 
 # ── Pipeline CRUD ────────────────────────────────────────────────────────
+
 
 @router.post("/", response_model=PipelineInDB, status_code=status.HTTP_201_CREATED)
 @limiter.limit(f"{config.RATE_LIMIT_REGISTER}/minute")
@@ -77,6 +83,7 @@ async def retrieve(
 
 # ── Run a pipeline ──────────────────────────────────────────────────────
 
+
 @router.post(
     "/{pipeline_id}/run",
     response_model=TaskResponse,
@@ -107,6 +114,7 @@ async def run(
 
 # ── Pipeline version ────────────────────────────────────────────────────
 
+
 @router.get(
     "/{pipeline_id}/versions",
     response_model=list[PipelineVersionInDB],
@@ -118,6 +126,7 @@ async def list_versions(
 ):
     """List versions of a given pipeline."""
     from app.pipelines.service import list_versions as _list_versions
+
     return await _list_versions(db, pipeline_id, current_user.id)
 
 
@@ -137,6 +146,7 @@ async def create_version(
 
 
 # ── Step definition registry ────────────────────────────────────────────
+
 
 @router.get("/step-types", response_model=list[str])
 async def list_step_types():

@@ -66,7 +66,9 @@ class HttpRequestStep(Step):
             self.retry_on_status = set(int(s) for s in retry_on)
         # client_factory lets tests inject a mock transport; production uses
         # the SSRF-protected builder.
-        self.client_factory = client_factory or (lambda: build_client(timeout=self.timeout))
+        self.client_factory = client_factory or (
+            lambda: build_client(timeout=self.timeout)
+        )
 
     @classmethod
     def validate_config(cls, config: dict[str, Any]) -> None:
@@ -93,6 +95,7 @@ class HttpRequestStep(Step):
     async def execute(self, ctx: StepContext) -> StepResult:
         import asyncio
         import time
+
         try:
             url = resolve(self.url_template, ctx.variables)
         except KeyError as e:
@@ -107,9 +110,7 @@ class HttpRequestStep(Step):
             )
 
         try:
-            headers = {
-                k: resolve(v, ctx.variables) for k, v in self.headers.items()
-            }
+            headers = {k: resolve(v, ctx.variables) for k, v in self.headers.items()}
         except KeyError as e:
             return StepResult(
                 outcome=StepOutcome.FAILED,
@@ -144,9 +145,7 @@ class HttpRequestStep(Step):
             duration_ms = int((time.monotonic() - started) * 1000)
             if response.status_code in self.retry_on_status:
                 if attempt < attempts - 1:
-                    last_error = (
-                        f"retryable status {response.status_code} on attempt {attempt + 1}"
-                    )
+                    last_error = f"retryable status {response.status_code} on attempt {attempt + 1}"
                     continue
                 # Retryable status but no retries left -> fail
                 return StepResult(

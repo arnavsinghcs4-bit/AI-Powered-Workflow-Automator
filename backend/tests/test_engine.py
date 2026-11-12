@@ -57,7 +57,9 @@ async def pipeline_with_version(db_session: AsyncSession, test_user: User):
 
 
 @pytest.fixture
-async def pending_run(db_session: AsyncSession, test_user: User, pipeline_with_version: dict):
+async def pending_run(
+    db_session: AsyncSession, test_user: User, pipeline_with_version: dict
+):
     """Create a pending run with step_runs."""
     pipeline = pipeline_with_version["pipeline"]
     version = pipeline_with_version["version"]
@@ -108,7 +110,9 @@ class TestSubmitRunTask:
                     resp = responses[idx]
                     response = MagicMock()
                     response.status_code = resp.get("status", 200)
-                    response.headers = resp.get("headers", {"content-type": "application/json"})
+                    response.headers = resp.get(
+                        "headers", {"content-type": "application/json"}
+                    )
                     response.text = resp.get("body", '{"ok": true}')
                     return response
 
@@ -116,21 +120,34 @@ class TestSubmitRunTask:
 
         return mock_client_factory, call_count
 
-    async def test_submit_run_success(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_success(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test successful run execution."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
         version = pending_run["version"]
 
-        mock_factory, call_count = self._make_mock_client([{"status": 200, "body": '{"result": "ok"}'}])
+        mock_factory, call_count = self._make_mock_client(
+            [{"status": 200, "body": '{"result": "ok"}'}]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data"}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -141,28 +158,44 @@ class TestSubmitRunTask:
         assert run_row.finished_at is not None
 
         # Verify step_run is succeeded with output
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "succeeded"
         assert sr.output is not None
         assert sr.output["status"] == 200
         assert sr.output["body"] == '{"result": "ok"}'
 
-    async def test_submit_run_step_failure(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_step_failure(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test run fails when step fails (non-retryable 500 with retries=0)."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
         version = pending_run["version"]
 
-        mock_factory, call_count = self._make_mock_client([{"status": 500, "body": "Internal Server Error"}])
+        mock_factory, call_count = self._make_mock_client(
+            [{"status": 500, "body": "Internal Server Error"}]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data", "retries": 0}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                            "retries": 0,
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -170,29 +203,45 @@ class TestSubmitRunTask:
         run_row = result.scalar_one()
         assert run_row.status == "failed"
 
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "failed"
         assert sr.error is not None
 
-    async def test_submit_run_retry_then_success(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_retry_then_success(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test retry logic: first attempt fails (500), second succeeds (200)."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
         version = pending_run["version"]
 
-        mock_factory, call_count = self._make_mock_client([
-            {"status": 500, "body": "Server Error"},
-            {"status": 200, "body": '{"ok": true}'},
-        ])
+        mock_factory, call_count = self._make_mock_client(
+            [
+                {"status": 500, "body": "Server Error"},
+                {"status": 200, "body": '{"ok": true}'},
+            ]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data", "retries": 1}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                            "retries": 1,
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -202,29 +251,45 @@ class TestSubmitRunTask:
         run_row = result.scalar_one()
         assert run_row.status == "succeeded"
 
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "succeeded"
 
-    async def test_submit_run_retry_exhausted(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_retry_exhausted(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test all retries exhausted -> run fails."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
         version = pending_run["version"]
 
-        mock_factory, call_count = self._make_mock_client([
-            {"status": 500, "body": "Server Error"},
-            {"status": 500, "body": "Server Error"},
-            {"status": 500, "body": "Server Error"},
-        ])
+        mock_factory, call_count = self._make_mock_client(
+            [
+                {"status": 500, "body": "Server Error"},
+                {"status": 500, "body": "Server Error"},
+                {"status": 500, "body": "Server Error"},
+            ]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data", "retries": 2}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                            "retries": 2,
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -234,11 +299,15 @@ class TestSubmitRunTask:
         run_row = result.scalar_one()
         assert run_row.status == "failed"
 
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "failed"
 
-    async def test_submit_run_timeout(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_timeout(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test timeout handling (httpx.TimeoutException)."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
@@ -261,11 +330,21 @@ class TestSubmitRunTask:
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data", "retries": 0}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                            "retries": 0,
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -273,33 +352,56 @@ class TestSubmitRunTask:
         run_row = result.scalar_one()
         assert run_row.status == "failed"
 
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "failed"
         assert "TimeoutException" in sr.error or "timeout" in sr.error.lower()
 
-    async def test_submit_run_double_delivery(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_double_delivery(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test idempotent re-delivery: submitting same run twice."""
         run = pending_run["run"]
         version = pending_run["version"]
 
-        mock_factory, call_count = self._make_mock_client([{"status": 200, "body": '{"ok": true}'}])
+        mock_factory, call_count = self._make_mock_client(
+            [{"status": 200, "body": '{"ok": true}'}]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             # First delivery
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data"}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
             # Second delivery (should be no-op because run is no longer pending)
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data"}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -307,7 +409,9 @@ class TestSubmitRunTask:
         run_row = result.scalar_one()
         assert run_row.status == "succeeded"
 
-    async def test_submit_run_stale_lease_reclaim(self, db_session: AsyncSession, pending_run: dict):
+    async def test_submit_run_stale_lease_reclaim(
+        self, db_session: AsyncSession, pending_run: dict
+    ):
         """Test stale-run recovery: claim a run left in 'running' with old claimed_at."""
         run = pending_run["run"]
         step_run = pending_run["step_run"]
@@ -318,15 +422,26 @@ class TestSubmitRunTask:
         run.claimed_at = datetime.now(timezone.utc) - timedelta(minutes=10)
         await db_session.commit()
 
-        mock_factory, call_count = self._make_mock_client([{"status": 200, "body": '{"recovered": true}'}])
+        mock_factory, call_count = self._make_mock_client(
+            [{"status": 200, "body": '{"recovered": true}'}]
+        )
 
         with patch("app.steps.registry.step_types") as mock_step_types:
             from app.steps.http_request import HttpRequestStep
+
             mock_step_types.return_value = {"http_request": HttpRequestStep}
 
             submit_run(
                 run_id=run.id,
-                steps_data={"step1": {"type": "http_request", "config": {"method": "GET", "url": "http://api.example.com/data"}}},
+                steps_data={
+                    "step1": {
+                        "type": "http_request",
+                        "config": {
+                            "method": "GET",
+                            "url": "http://api.example.com/data",
+                        },
+                    }
+                },
                 definition=version.definition,
             )
 
@@ -336,7 +451,9 @@ class TestSubmitRunTask:
         assert run_row.status == "succeeded"
         assert run_row.claimed_at is not None  # Updated on re-claim
 
-        result = await db_session.execute(select(StepRun).where(StepRun.id == step_run.id))
+        result = await db_session.execute(
+            select(StepRun).where(StepRun.id == step_run.id)
+        )
         sr = result.scalar_one()
         assert sr.status == "succeeded"
 
@@ -351,10 +468,14 @@ class TestVersionCRUD:
         await db_session.flush()
 
         v1 = PipelineVersion(
-            pipeline_id=pipeline.id, version_number=1, definition={"nodes": [{"id": "a"}]}
+            pipeline_id=pipeline.id,
+            version_number=1,
+            definition={"nodes": [{"id": "a"}]},
         )
         v2 = PipelineVersion(
-            pipeline_id=pipeline.id, version_number=2, definition={"nodes": [{"id": "b"}]}
+            pipeline_id=pipeline.id,
+            version_number=2,
+            definition={"nodes": [{"id": "b"}]},
         )
         db_session.add_all([v1, v2])
         await db_session.commit()
@@ -386,7 +507,9 @@ class TestCrossUserIsolation:
 
         # User B tries to query User A's pipeline - should get empty result
         result = await db_session.execute(
-            select(Pipeline).where(Pipeline.id == pipeline.id, Pipeline.user_id == user_b.id)
+            select(Pipeline).where(
+                Pipeline.id == pipeline.id, Pipeline.user_id == user_b.id
+            )
         )
         assert result.scalar_one_or_none() is None
 

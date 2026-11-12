@@ -116,7 +116,9 @@ def _mark_run(run_id: int, status: str, error: str | None = None) -> None:
 
 
 @shared_task(bind=True, name="scheduler.submit_run")
-def submit_run(self, run_id: int, steps_data: dict[str, Any], definition: dict[str, Any]) -> None:
+def submit_run(
+    self, run_id: int, steps_data: dict[str, Any], definition: dict[str, Any]
+) -> None:
     """Execute a pipeline run step-by-step.
 
     ``steps_data`` is a dict of {node_id: step_config} and ``definition``
@@ -149,7 +151,11 @@ def submit_run(self, run_id: int, steps_data: dict[str, Any], definition: dict[s
         _mark_run(run_id, "failed", error=f"Step build failed: {e}")
         return
 
-    node_to_step = {node["id"]: step for node in definition.get("nodes", []) for step in [step_instances.get(node["id"])]}
+    node_to_step = {
+        node["id"]: step
+        for node in definition.get("nodes", [])
+        for step in [step_instances.get(node["id"])]
+    }
     # Fallback: if node ids don't match, try by step_type.
     if not node_to_step:
         node_to_step = {s["node_id"]: step_instances.get(s["step_type"]) for s in steps}

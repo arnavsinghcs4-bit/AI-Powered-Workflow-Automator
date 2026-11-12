@@ -163,7 +163,9 @@ class TestPipelineVersions:
 
     async def test_list_versions(self, auth_client):
         """GET /pipelines/{id}/versions - list versions."""
-        create_resp = await auth_client.post("/pipelines/", json={"name": "List Versions"})
+        create_resp = await auth_client.post(
+            "/pipelines/", json={"name": "List Versions"}
+        )
         pipeline_id = create_resp.json()["id"]
 
         await auth_client.post(
@@ -246,7 +248,15 @@ class TestPipelineRun:
             f"/pipelines/{pipeline_id}/versions",
             json={
                 "version_number": 1,
-                "definition": {"nodes": [{"id": "a", "type": "http_request", "config": {"url": "http://a.com"}}]},
+                "definition": {
+                    "nodes": [
+                        {
+                            "id": "a",
+                            "type": "http_request",
+                            "config": {"url": "http://a.com"},
+                        }
+                    ]
+                },
             },
         )
         _v1_id = v1_resp.json()["id"]
@@ -256,7 +266,15 @@ class TestPipelineRun:
             f"/pipelines/{pipeline_id}/versions",
             json={
                 "version_number": 2,
-                "definition": {"nodes": [{"id": "b", "type": "http_request", "config": {"url": "http://b.com"}}]},
+                "definition": {
+                    "nodes": [
+                        {
+                            "id": "b",
+                            "type": "http_request",
+                            "config": {"url": "http://b.com"},
+                        }
+                    ]
+                },
             },
         )
         v2_id = v2_resp.json()["id"]
@@ -272,14 +290,24 @@ class TestPipelineRun:
 
     async def test_run_pipeline_explicit_version(self, auth_client):
         """POST /pipelines/{id}/run - uses explicit version_id."""
-        create_resp = await auth_client.post("/pipelines/", json={"name": "Explicit Ver"})
+        create_resp = await auth_client.post(
+            "/pipelines/", json={"name": "Explicit Ver"}
+        )
         pipeline_id = create_resp.json()["id"]
 
         v1_resp = await auth_client.post(
             f"/pipelines/{pipeline_id}/versions",
             json={
                 "version_number": 1,
-                "definition": {"nodes": [{"id": "a", "type": "http_request", "config": {"url": "http://a.com"}}]},
+                "definition": {
+                    "nodes": [
+                        {
+                            "id": "a",
+                            "type": "http_request",
+                            "config": {"url": "http://a.com"},
+                        }
+                    ]
+                },
             },
         )
         v1_id = v1_resp.json()["id"]
@@ -288,7 +316,15 @@ class TestPipelineRun:
             f"/pipelines/{pipeline_id}/versions",
             json={
                 "version_number": 2,
-                "definition": {"nodes": [{"id": "b", "type": "http_request", "config": {"url": "http://b.com"}}]},
+                "definition": {
+                    "nodes": [
+                        {
+                            "id": "b",
+                            "type": "http_request",
+                            "config": {"url": "http://b.com"},
+                        }
+                    ]
+                },
             },
         )
         _v2_id = v2_resp.json()["id"]
@@ -304,7 +340,9 @@ class TestPipelineRun:
 
     async def test_run_pipeline_no_versions_404(self, auth_client):
         """POST /pipelines/{id}/run - 404 when no versions exist."""
-        create_resp = await auth_client.post("/pipelines/", json={"name": "No Versions"})
+        create_resp = await auth_client.post(
+            "/pipelines/", json={"name": "No Versions"}
+        )
         pipeline_id = create_resp.json()["id"]
 
         response = await auth_client.post(
@@ -328,7 +366,10 @@ class TestPipelineRun:
                         {
                             "id": "step1",
                             "type": "http_request",
-                            "config": {"method": "INVALID", "url": "http://example.com"},
+                            "config": {
+                                "method": "INVALID",
+                                "url": "http://example.com",
+                            },
                         }
                     ]
                 },

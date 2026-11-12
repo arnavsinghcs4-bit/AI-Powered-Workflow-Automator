@@ -77,6 +77,7 @@ class RunLogger:
 # then call ``logger.step_started(...)`` etc.
 logger: RunLogger | None = None
 
+
 def set_logger(run_id: int, step_run_id: int | None = None) -> None:
     global logger
     logger = RunLogger(run_id, step_run_id)
