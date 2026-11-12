@@ -1,1 +1,5 @@
-"""Phase 3+ placeholder routes."""
+"""Pipeline CRUD + runs endpoints."""
+
+from app.pipelines.routes import router
+
+__all__ = ["router"]

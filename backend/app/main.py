@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from app.auth import router as auth_router
 from app.auth.routes import limiter
 from app.health import router as health_router
+from app.pipelines import router as pipelines_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +52,7 @@ app.add_middleware(
 # Routes
 app.include_router(health_router)
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(pipelines_router, tags=["pipelines"])
 
 
 @app.get("/")

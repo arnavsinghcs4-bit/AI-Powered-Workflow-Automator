@@ -5,7 +5,6 @@ enabled on all four tables; the worker deliberately does not set app.user,
 so RLS is a no-op there — owner scoping is enforced by the API layer.
 """
 
-from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -77,7 +76,7 @@ class PipelineVersion(Base):
     version_number = Column(Integer, nullable=False)
     definition = Column(JSON, nullable=False)
     created_at = Column(
-        DateTime(timezone=True), server_default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
 
     pipeline = relationship(
