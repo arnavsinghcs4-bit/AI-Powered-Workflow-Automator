@@ -69,16 +69,6 @@ def submit_run_task(_patch_worker_db):
     This fixture imports submit_run AFTER the _patch_worker_db fixture has run,
     so the worker's sync_engine and _sync_session_maker are properly patched.
     """
-    return submit_run
-
-
-@pytest.fixture
-def submit_run_task(_patch_worker_db):
-    """Get submit_run function with asyncio.run already patched and worker DB patched.
-
-    This fixture imports submit_run AFTER the _patch_worker_db fixture has run,
-    so the worker's sync_engine and _sync_session_maker are properly patched.
-    """
     from app.worker.tasks import submit_run
     return submit_run
 

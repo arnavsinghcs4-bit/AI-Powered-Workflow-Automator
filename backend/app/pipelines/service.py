@@ -16,6 +16,7 @@ from app.pipelines.models import Pipeline, PipelineVersion, Run, StepRun
 from app.pipelines.schemas import (
     PipelineCreate,
     PipelineInDB,
+    PipelineVersionBase,
     PipelineVersionInDB,
     TaskCreate,
     TaskResponse,
