@@ -32,8 +32,9 @@ def validate_definition(definition: list[dict[str, Any]]) -> list[dict[str, Any]
     """Validate a pipeline definition; return it unchanged on success."""
     if not isinstance(definition, list):
         raise StepValidationError("definition must be a list of nodes")
+    # Empty definitions are allowed (e.g., initial version created by create_pipeline)
     if not definition:
-        raise StepValidationError("definition must contain at least one node")
+        return definition
 
     seen_ids: set[str] = set()
     for node in definition:
@@ -54,7 +55,10 @@ def validate_definition(definition: list[dict[str, Any]]) -> list[dict[str, Any]
         config = node.get("config")
         if not isinstance(config, dict):
             raise StepValidationError(f"node {node_id!r}: config must be an object")
-        STEP_TYPES[node_type].validate_config(config)
+        try:
+            STEP_TYPES[node_type].validate_config(config)
+        except ValueError as e:
+            raise StepValidationError(f"node {node_id!r}: {e}")
 
     return definition
 

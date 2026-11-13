@@ -1,7 +1,7 @@
 """Testing configuration and fixtures."""
 
 import os
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urlparse
 
 import pytest
@@ -19,6 +19,7 @@ from sqlalchemy.pool import NullPool
 os.environ["ENABLE_RATE_LIMITING"] = "false"
 os.environ["JWT_SECRET"] = "test-secret-key-at-least-32-characters-long-12345"
 os.environ["ENV"] = "test"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"  # Test Redis URL
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()
@@ -48,6 +49,9 @@ if not is_safe:
         f"Never point to a Supabase project."
     )
 
+# Sync URL for worker tests (psycopg driver)
+test_sync_url = test_url.replace("postgresql://", "postgresql+psycopg://")
+
 
 async def _truncate_test_db(engine):
     """Clean test database using autocommit to ensure committed truncate."""
@@ -55,6 +59,46 @@ async def _truncate_test_db(engine):
         await conn.execute(
             text("TRUNCATE users, refresh_tokens RESTART IDENTITY CASCADE")
         )
+
+
+@pytest.fixture(autouse=True)
+def _patch_worker_db():
+    """Patch worker's sync_engine to use test database."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import QueuePool
+
+    test_engine = create_engine(
+        test_sync_url,
+        echo=False,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+        connect_args={
+            "prepare_threshold": None,
+            "connect_timeout": 10,
+        },
+    )
+
+    # Patch the engine and recreate the session maker
+    test_session_maker = sessionmaker(bind=test_engine, expire_on_commit=False)
+
+    with patch("app.worker.tasks.sync_engine", test_engine):
+        with patch("app.worker.database.sync_engine", test_engine):
+            with patch("app.worker.tasks._sync_session_maker", test_session_maker):
+                yield
+
+    test_engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _patch_celery():
+    """Patch Celery app to avoid connecting to Redis in tests."""
+    mock_celery = MagicMock()
+    mock_celery.send_task = MagicMock()
+    with patch("app.worker.celery_app.celery_app", mock_celery):
+        yield
 
 
 @pytest.fixture
@@ -108,6 +152,19 @@ async def client(db_session):
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def test_user(client):
+    """Create a test user via /auth/register and return dict with email/password."""
+    email = "testuser@example.com"
+    password = "SecurePassword123"
+    response = await client.post(
+        "/auth/register",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == 201
+    return {"email": email, "password": password}
 
 
 @pytest.fixture

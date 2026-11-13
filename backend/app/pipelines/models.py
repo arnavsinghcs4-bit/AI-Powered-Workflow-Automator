@@ -34,6 +34,7 @@ class Pipeline(Base):
     )
     name = Column(String(255), nullable=False)
     description = Column(Text)
+    is_active = Column(sa.Boolean, server_default=sa.true(), nullable=False)
     # FK added in a deferred ALTER after pipeline_versions exists; ORM side
     # uses use_alter=True + post_update so the object graph works pre-flush.
     current_version_id = Column(
@@ -45,10 +46,16 @@ class Pipeline(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now()
     )
+    created_at = Column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
 
     user = relationship("User", back_populates="pipelines")
     versions = relationship(
-        "PipelineVersion", back_populates="pipeline", cascade="all, delete-orphan"
+        "PipelineVersion",
+        back_populates="pipeline",
+        cascade="all, delete-orphan",
+        foreign_keys="PipelineVersion.pipeline_id",
     )
     runs = relationship("Run", back_populates="pipeline", cascade="all, delete-orphan")
     current_version = relationship(
@@ -121,6 +128,9 @@ class Run(Base):
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
     error = Column(Text)
+    # Lease column for stale-run recovery. Set by worker when claiming a run;
+    # NULL = unclaimed. Stale if status='running' AND claimed_at < now() - 5 min.
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

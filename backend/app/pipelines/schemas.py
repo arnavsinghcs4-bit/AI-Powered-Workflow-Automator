@@ -97,7 +97,7 @@ class StepRunInDB(StepRunBase):
 class TaskCreate(BaseModel):
     """Create a pipeline run (trigger)."""
 
-    pipeline_id: int = Field(..., gt=0)
+    pipeline_id: int | None = Field(default=None, gt=0)
     version_id: int | None = None
     trigger_type: str = Field(
         default="manual",

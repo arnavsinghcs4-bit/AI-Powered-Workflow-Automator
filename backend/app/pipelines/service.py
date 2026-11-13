@@ -47,17 +47,6 @@ async def create_pipeline(
         description=payload.description,
     )
     db.add(pipeline)
-    await db.flush()
-
-    # Eager-create version 1 with an empty definition.
-    version_number = await _next_version_number(db, pipeline.id)
-    version = PipelineVersion(
-        pipeline_id=pipeline.id,
-        version_number=version_number,
-        definition={},
-    )
-    db.add(version)
-
     await db.commit()
     await db.refresh(pipeline)
     return PipelineInDB(
@@ -142,6 +131,55 @@ async def list_versions(
     ]
 
 
+async def create_version(
+    db: AsyncSession,
+    pipeline_id: int,
+    payload: PipelineVersionBase,
+    user_id: int,
+) -> PipelineVersionInDB:
+    """Create a new pipeline version."""
+    # Verify pipeline ownership
+    pipeline_result = await get_pipeline(db, pipeline_id, user_id)
+    if pipeline_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Pipeline not found",
+        )
+
+    # Use user-provided version_number (validated by schema)
+    version_number = payload.version_number
+
+    # Check for duplicate version_number
+    existing = await db.execute(
+        select(PipelineVersion).where(
+            PipelineVersion.pipeline_id == pipeline_id,
+            PipelineVersion.version_number == version_number,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail=f"Version {version_number} already exists for this pipeline",
+        )
+
+    version = PipelineVersion(
+        pipeline_id=pipeline_id,
+        version_number=version_number,
+        definition=payload.definition,
+    )
+    db.add(version)
+    await db.commit()
+    await db.refresh(version)
+
+    return PipelineVersionInDB(
+        id=version.id,
+        pipeline_id=version.pipeline_id,
+        version_number=version.version_number,
+        definition=version.definition,
+        created_at=version.created_at,
+    )
+
+
 async def trigger_run(
     db: AsyncSession,
     payload: TaskCreate,
@@ -183,8 +221,9 @@ async def trigger_run(
             detail=f"Invalid pipeline definition: {e}",
         )
 
-    # Build step instances for the worker.
+    # Build step instances for the worker and serialize definitions.
     steps = build_steps(version.definition.get("nodes", []))
+    steps_data = {node_id: node["config"] for node_id, node in zip(steps.keys(), version.definition.get("nodes", []))}
 
     # Persist a run row.
     run = Run(
@@ -198,10 +237,10 @@ async def trigger_run(
     await db.flush()
 
     # Persist a step_run row for each step.
-    for step in steps:
+    for node_id, step in steps.items():
         sr = StepRun(
             run_id=run.id,
-            node_id=step.step_type,
+            node_id=node_id,
             step_type=step.step_type,
             status="pending",
             attempt=1,
@@ -213,7 +252,7 @@ async def trigger_run(
 
     # Submit to the worker via the scheduler.
     try:
-        await submit_run(run.id, steps, version.definition)
+        await submit_run(run.id, steps_data, version.definition)
     except Exception as e:
         # If the scheduler fails, roll back the run and re-raise.
         await db.rollback()

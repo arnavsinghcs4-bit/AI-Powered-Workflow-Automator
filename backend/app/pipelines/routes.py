@@ -41,6 +41,15 @@ limiter = Limiter(
 )
 
 
+# ── Step definition registry ────────────────────────────────────────────
+
+
+@router.get("/step-types", response_model=list[str])
+async def list_step_types():
+    """Return the set of registered step types."""
+    return step_types()
+
+
 # ── Pipeline CRUD ────────────────────────────────────────────────────────
 
 
@@ -125,6 +134,14 @@ async def list_versions(
     current_user: User = Depends(get_current_user),
 ):
     """List versions of a given pipeline."""
+    # Verify pipeline ownership first
+    from app.pipelines.service import get_pipeline
+    pipeline = await get_pipeline(db, pipeline_id, current_user.id)
+    if pipeline is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pipeline not found",
+        )
     from app.pipelines.service import list_versions as _list_versions
 
     return await _list_versions(db, pipeline_id, current_user.id)
@@ -143,12 +160,3 @@ async def create_version(
 ):
     """Create a new immutable pipeline version."""
     return await service.create_version(db, pipeline_id, payload, current_user.id)
-
-
-# ── Step definition registry ────────────────────────────────────────────
-
-
-@router.get("/step-types", response_model=list[str])
-async def list_step_types():
-    """Return the set of registered step types."""
-    return step_types()

@@ -9,7 +9,78 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from app.pipelines.models import Pipeline, PipelineVersion, Run, StepRun
+
+
+# Import submit_run first, then patch asyncio.run in the worker module
+# to work with pytest-asyncio's running event loop
 from app.worker.tasks import submit_run
+import app.worker.tasks as worker_tasks
+import asyncio
+import threading
+
+# Replace asyncio.run in the worker module with a version that works in tests
+_original_worker_run = worker_tasks.asyncio.run
+
+def _patched_worker_run(coro, *, debug=False):
+    """Patch asyncio.run in worker module to run coroutine in a new event loop in a thread.
+
+    This avoids the "event loop already running" error when tests are running
+    in pytest-asyncio's event loop.
+    """
+    print(f"DEBUG _patched_worker_run: called with coro: {coro}")
+    result_container = {"result": None, "exception": None}
+
+    def run_in_thread():
+        # Create a new event loop in this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            if debug:
+                loop.set_debug(True)
+            result_container["result"] = loop.run_until_complete(coro)
+        except Exception as e:
+            result_container["exception"] = e
+        finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception:
+                pass
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
+
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    thread.join()
+
+    if result_container["exception"]:
+        raise result_container["exception"]
+    return result_container["result"]
+
+# Apply the patch to the worker module
+worker_tasks.asyncio.run = _patched_worker_run
+print(f"DEBUG: worker_tasks.asyncio.run = {worker_tasks.asyncio.run}")
+
+
+@pytest.fixture
+def submit_run_task(_patch_worker_db):
+    """Get submit_run function with asyncio.run already patched and worker DB patched.
+
+    This fixture imports submit_run AFTER the _patch_worker_db fixture has run,
+    so the worker's sync_engine and _sync_session_maker are properly patched.
+    """
+    return submit_run
+
+
+@pytest.fixture
+def submit_run_task(_patch_worker_db):
+    """Get submit_run function with asyncio.run already patched and worker DB patched.
+
+    This fixture imports submit_run AFTER the _patch_worker_db fixture has run,
+    so the worker's sync_engine and _sync_session_maker are properly patched.
+    """
+    from app.worker.tasks import submit_run
+    return submit_run
 
 
 @pytest.fixture
@@ -121,7 +192,7 @@ class TestSubmitRunTask:
         return mock_client_factory, call_count
 
     async def test_submit_run_success(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test successful run execution."""
         run = pending_run["run"]
@@ -132,12 +203,57 @@ class TestSubmitRunTask:
             [{"status": 200, "body": '{"result": "ok"}'}]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+            },
+            client_factory=mock_factory,
+        )
 
-            submit_run(
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
+            import app.worker.tasks as wt
+            print(f"DEBUG: wt.asyncio.run = {wt.asyncio.run}")
+            print(f"DEBUG: wt._sync_session_maker = {wt._sync_session_maker}")
+            print(f"DEBUG: wt.sync_engine = {wt.sync_engine}")
+            # Also check if run exists in worker DB
+            with wt._sync_session_maker() as session:
+                from app.pipelines.models import Run, StepRun
+                from sqlalchemy import select
+                run_check = session.execute(select(Run).where(Run.id == run.id)).scalar_one_or_none()
+                print(f"DEBUG: run in worker DB = {run_check}")
+                if run_check:
+                    step_check = session.execute(select(StepRun).where(StepRun.run_id == run.id)).scalars().all()
+                    print(f"DEBUG: step_runs in worker DB = {step_check}")
+
+            # Patch asyncio.run to see if it's called
+            original_patched = wt.asyncio.run
+            def debug_patched(coro, *, debug=False):
+                print(f"DEBUG: asyncio.run called with coro: {coro}")
+                result = original_patched(coro, debug=debug)
+                print(f"DEBUG: asyncio.run returned: {result}")
+                return result
+            wt.asyncio.run = debug_patched
+
+            # Also patch _mark_step to see what's happening
+            original_mark_step = wt._mark_step
+            def debug_mark_step(step_run_id, status, output=None, error=None):
+                print(f"DEBUG: _mark_step called: step_run_id={step_run_id}, status={status}, output={output}, error={error}")
+                return original_mark_step(step_run_id, status, output, error)
+            wt._mark_step = debug_mark_step
+
+            # Also patch _mark_run
+            original_mark_run = wt._mark_run
+            def debug_mark_run(run_id, status, error=None):
+                print(f"DEBUG: _mark_run called: run_id={run_id}, status={status}, error={error}")
+                return original_mark_run(run_id, status, error)
+            wt._mark_run = debug_mark_run
+
+            submit_run_task.run(
                 run_id=run.id,
                 steps_data={
                     "step1": {
@@ -151,24 +267,30 @@ class TestSubmitRunTask:
                 definition=version.definition,
             )
 
-        # Verify run is succeeded
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "succeeded"
-        assert run_row.finished_at is not None
+            # Check DB after task completes
+            with wt._sync_session_maker() as session:
+                from app.pipelines.models import Run, StepRun
+                from sqlalchemy import select
+                run_check = session.execute(select(Run).where(Run.id == run.id)).scalar_one_or_none()
+                print(f"DEBUG AFTER: run in worker DB = {run_check}, status={run_check.status if run_check else 'None'}")
+                if run_check:
+                    step_check = session.execute(select(StepRun).where(StepRun.run_id == run.id)).scalars().all()
+                    print(f"DEBUG AFTER: step_runs in worker DB = {[(s.id, s.status, s.output) for s in step_check]}")
+
+        # Verify run is succeeded (need to refresh because session has expire_on_commit=False)
+        await db_session.refresh(run)
+        assert run.status == "succeeded"
+        assert run.finished_at is not None
 
         # Verify step_run is succeeded with output
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "succeeded"
-        assert sr.output is not None
-        assert sr.output["status"] == 200
-        assert sr.output["body"] == '{"result": "ok"}'
+        await db_session.refresh(step_run)
+        assert step_run.status == "succeeded"
+        assert step_run.output is not None
+        assert step_run.output["status"] == 200
+        assert step_run.output["body"] == '{"result": "ok"}'
 
     async def test_submit_run_step_failure(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test run fails when step fails (non-retryable 500 with retries=0)."""
         run = pending_run["run"]
@@ -179,11 +301,20 @@ class TestSubmitRunTask:
             [{"status": 500, "body": "Internal Server Error"}]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+                "retries": 0,
+            },
+            client_factory=mock_factory,
+        )
 
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             submit_run(
                 run_id=run.id,
                 steps_data={
@@ -199,19 +330,16 @@ class TestSubmitRunTask:
                 definition=version.definition,
             )
 
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "failed"
+        # Refresh objects since session has expire_on_commit=False
+        await db_session.refresh(run)
+        assert run.status == "failed"
 
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "failed"
-        assert sr.error is not None
+        await db_session.refresh(step_run)
+        assert step_run.status == "failed"
+        assert step_run.error is not None
 
     async def test_submit_run_retry_then_success(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test retry logic: first attempt fails (500), second succeeds (200)."""
         run = pending_run["run"]
@@ -225,11 +353,20 @@ class TestSubmitRunTask:
             ]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+                "retries": 1,
+            },
+            client_factory=mock_factory,
+        )
 
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             submit_run(
                 run_id=run.id,
                 steps_data={
@@ -247,18 +384,15 @@ class TestSubmitRunTask:
 
         assert call_count["count"] == 2  # Initial + 1 retry
 
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "succeeded"
+        # Refresh objects since session has expire_on_commit=False
+        await db_session.refresh(run)
+        assert run.status == "succeeded"
 
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "succeeded"
+        await db_session.refresh(step_run)
+        assert step_run.status == "succeeded"
 
     async def test_submit_run_retry_exhausted(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test all retries exhausted -> run fails."""
         run = pending_run["run"]
@@ -273,11 +407,20 @@ class TestSubmitRunTask:
             ]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+                "retries": 2,
+            },
+            client_factory=mock_factory,
+        )
 
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             submit_run(
                 run_id=run.id,
                 steps_data={
@@ -295,18 +438,15 @@ class TestSubmitRunTask:
 
         assert call_count["count"] == 3  # Initial + 2 retries
 
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "failed"
+        # Refresh objects since session has expire_on_commit=False
+        await db_session.refresh(run)
+        assert run.status == "failed"
 
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "failed"
+        await db_session.refresh(step_run)
+        assert step_run.status == "failed"
 
     async def test_submit_run_timeout(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test timeout handling (httpx.TimeoutException)."""
         run = pending_run["run"]
@@ -328,11 +468,20 @@ class TestSubmitRunTask:
 
             return MockClient()
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+                "retries": 0,
+            },
+            client_factory=mock_client_factory,
+        )
 
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             submit_run(
                 run_id=run.id,
                 steps_data={
@@ -348,19 +497,16 @@ class TestSubmitRunTask:
                 definition=version.definition,
             )
 
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "failed"
+        # Refresh objects since session has expire_on_commit=False
+        await db_session.refresh(run)
+        assert run.status == "failed"
 
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "failed"
-        assert "TimeoutException" in sr.error or "timeout" in sr.error.lower()
+        await db_session.refresh(step_run)
+        assert step_run.status == "failed"
+        assert "TimeoutException" in step_run.error or "timeout" in step_run.error.lower()
 
     async def test_submit_run_double_delivery(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test idempotent re-delivery: submitting same run twice."""
         run = pending_run["run"]
@@ -370,13 +516,21 @@ class TestSubmitRunTask:
             [{"status": 200, "body": '{"ok": true}'}]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+            },
+            client_factory=mock_factory,
+        )
 
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             # First delivery
-            submit_run(
+            submit_run_task.run(
                 run_id=run.id,
                 steps_data={
                     "step1": {
@@ -391,7 +545,7 @@ class TestSubmitRunTask:
             )
 
             # Second delivery (should be no-op because run is no longer pending)
-            submit_run(
+            submit_run_task.run(
                 run_id=run.id,
                 steps_data={
                     "step1": {
@@ -405,12 +559,12 @@ class TestSubmitRunTask:
                 definition=version.definition,
             )
 
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "succeeded"
+        # Refresh objects since session has expire_on_commit=False
+        await db_session.refresh(run)
+        assert run.status == "succeeded"
 
     async def test_submit_run_stale_lease_reclaim(
-        self, db_session: AsyncSession, pending_run: dict
+        self, db_session: AsyncSession, pending_run: dict, submit_run_task
     ):
         """Test stale-run recovery: claim a run left in 'running' with old claimed_at."""
         run = pending_run["run"]
@@ -426,12 +580,20 @@ class TestSubmitRunTask:
             [{"status": 200, "body": '{"recovered": true}'}]
         )
 
-        with patch("app.steps.registry.step_types") as mock_step_types:
-            from app.steps.http_request import HttpRequestStep
+        from app.steps.http_request import HttpRequestStep
 
-            mock_step_types.return_value = {"http_request": HttpRequestStep}
+        # Create a step instance with our mock factory
+        mock_step = HttpRequestStep(
+            {
+                "method": "GET",
+                "url": "http://api.example.com/data",
+            },
+            client_factory=mock_factory,
+        )
 
-            submit_run(
+        # Patch build_steps to return our mock step
+        with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
+            submit_run_task.run(
                 run_id=run.id,
                 steps_data={
                     "step1": {
@@ -446,16 +608,12 @@ class TestSubmitRunTask:
             )
 
         # Run should have been re-claimed and executed
-        result = await db_session.execute(select(Run).where(Run.id == run.id))
-        run_row = result.scalar_one()
-        assert run_row.status == "succeeded"
-        assert run_row.claimed_at is not None  # Updated on re-claim
+        await db_session.refresh(run)
+        assert run.status == "succeeded"
+        assert run.claimed_at is not None  # Updated on re-claim
 
-        result = await db_session.execute(
-            select(StepRun).where(StepRun.id == step_run.id)
-        )
-        sr = result.scalar_one()
-        assert sr.status == "succeeded"
+        await db_session.refresh(step_run)
+        assert step_run.status == "succeeded"
 
 
 class TestVersionCRUD:

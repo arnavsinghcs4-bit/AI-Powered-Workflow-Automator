@@ -1,38 +1,41 @@
 """Pipeline API integration tests - Phase 3 endpoints."""
 
 import pytest
+from httpx import AsyncClient
 
 
 @pytest.fixture
 async def auth_client(client, test_user):
-    """Test client with authenticated user."""
+    """Test client with authenticated user - creates new client to avoid mutating shared fixture."""
     login = await client.post(
         "/auth/login",
         json={"email": test_user["email"], "password": test_user["password"]},
     )
     access_token = login.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {access_token}"})
-    return client
+    # Create a new client with auth headers instead of mutating shared client
+    from app.main import app
+
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        ac.headers.update({"Authorization": f"Bearer {access_token}"})
+        yield ac
 
 
 @pytest.fixture
-async def auth_client2(db_session, client):
-    """Second authenticated test client for cross-user isolation tests."""
+async def auth_client2(db_session):
+    """Second authenticated test client for cross-user isolation tests - creates its own client and session."""
     from app.database import get_session
     from app.main import app
-    from httpx import AsyncClient
-
-    # Create second user
-    await client.post(
-        "/auth/register",
-        json={"email": "user2@test.com", "password": "SecurePassword123"},
-    )
 
     async def override_get_session():
         return db_session
 
     app.dependency_overrides[get_session] = override_get_session
     async with AsyncClient(app=app, base_url="http://test") as ac:
+        # Create second user using this client
+        await ac.post(
+            "/auth/register",
+            json={"email": "user2@test.com", "password": "SecurePassword123"},
+        )
         login = await ac.post(
             "/auth/login",
             json={"email": "user2@test.com", "password": "SecurePassword123"},

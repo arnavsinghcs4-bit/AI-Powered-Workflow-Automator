@@ -80,11 +80,18 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.Text()),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.true(), nullable=False),
         sa.Column("current_version_id", sa.Integer(), nullable=True),
         sa.Column(
             "updated_at",
             sa.TIMESTAMP(timezone=True),
             server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -260,20 +267,25 @@ def downgrade() -> None:
     op.execute("ALTER TABLE pipeline_versions DISABLE ROW LEVEL SECURITY;")
     if IS_SUPABASE:
         op.execute("REVOKE ALL ON pipeline_versions FROM anon, authenticated;")
-    op.drop_table("pipeline_versions")
 
+    # Drop FK constraint on pipelines pointing to pipeline_versions
+    op.drop_constraint(
+        "fk_pipelines_current_version_id", "pipelines", type_="foreignkey"
+    )
     op.drop_index(
         "idx_pipelines_current_version_id",
         table_name="pipelines",
         if_exists=True,
     )
-    op.drop_constraint(
-        "fk_pipelines_current_version_id", "pipelines", type_="foreignkey"
-    )
-    op.drop_index("idx_pipelines_user_id", table_name="pipelines", if_exists=True)
     op.execute("ALTER TABLE pipelines DISABLE ROW LEVEL SECURITY;")
     if IS_SUPABASE:
         op.execute("REVOKE ALL ON pipelines FROM anon, authenticated;")
+    op.drop_index("idx_pipelines_user_id", table_name="pipelines", if_exists=True)
+
+    # Now drop pipeline_versions (after FK removed from pipelines)
+    op.drop_table("pipeline_versions")
+
+    # Now drop pipelines
     op.drop_table("pipelines")
 
     # ---- re-create old tables in 001 shape ----
