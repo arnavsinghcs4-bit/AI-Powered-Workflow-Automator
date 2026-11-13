@@ -136,6 +136,7 @@ async def list_versions(
     """List versions of a given pipeline."""
     # Verify pipeline ownership first
     from app.pipelines.service import get_pipeline
+
     pipeline = await get_pipeline(db, pipeline_id, current_user.id)
     if pipeline is None:
         raise HTTPException(

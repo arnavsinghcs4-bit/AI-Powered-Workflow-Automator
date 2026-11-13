@@ -224,7 +224,10 @@ async def trigger_run(
 
     # Build step instances for the worker and serialize definitions.
     steps = build_steps(version.definition.get("nodes", []))
-    steps_data = {node_id: node["config"] for node_id, node in zip(steps.keys(), version.definition.get("nodes", []))}
+    steps_data = {
+        node_id: node["config"]
+        for node_id, node in zip(steps.keys(), version.definition.get("nodes", []))
+    }
 
     # Persist a run row.
     run = Run(

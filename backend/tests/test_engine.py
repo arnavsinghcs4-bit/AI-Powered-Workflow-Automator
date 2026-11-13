@@ -21,6 +21,7 @@ import threading
 # Replace asyncio.run in the worker module with a version that works in tests
 _original_worker_run = worker_tasks.asyncio.run
 
+
 def _patched_worker_run(coro, *, debug=False):
     """Patch asyncio.run in worker module to run coroutine in a new event loop in a thread.
 
@@ -57,6 +58,7 @@ def _patched_worker_run(coro, *, debug=False):
         raise result_container["exception"]
     return result_container["result"]
 
+
 # Apply the patch to the worker module
 worker_tasks.asyncio.run = _patched_worker_run
 print(f"DEBUG: worker_tasks.asyncio.run = {worker_tasks.asyncio.run}")
@@ -70,6 +72,7 @@ def submit_run_task(_patch_worker_db):
     so the worker's sync_engine and _sync_session_maker are properly patched.
     """
     from app.worker.tasks import submit_run
+
     return submit_run
 
 
@@ -207,6 +210,7 @@ class TestSubmitRunTask:
         # Patch build_steps to return our mock step
         with patch("app.steps.registry.build_steps", return_value={"step1": mock_step}):
             import app.worker.tasks as wt
+
             print(f"DEBUG: wt.asyncio.run = {wt.asyncio.run}")
             print(f"DEBUG: wt._sync_session_maker = {wt._sync_session_maker}")
             print(f"DEBUG: wt.sync_engine = {wt.sync_engine}")
@@ -214,33 +218,50 @@ class TestSubmitRunTask:
             with wt._sync_session_maker() as session:
                 from app.pipelines.models import Run, StepRun
                 from sqlalchemy import select
-                run_check = session.execute(select(Run).where(Run.id == run.id)).scalar_one_or_none()
+
+                run_check = session.execute(
+                    select(Run).where(Run.id == run.id)
+                ).scalar_one_or_none()
                 print(f"DEBUG: run in worker DB = {run_check}")
                 if run_check:
-                    step_check = session.execute(select(StepRun).where(StepRun.run_id == run.id)).scalars().all()
+                    step_check = (
+                        session.execute(select(StepRun).where(StepRun.run_id == run.id))
+                        .scalars()
+                        .all()
+                    )
                     print(f"DEBUG: step_runs in worker DB = {step_check}")
 
             # Patch asyncio.run to see if it's called
             original_patched = wt.asyncio.run
+
             def debug_patched(coro, *, debug=False):
                 print(f"DEBUG: asyncio.run called with coro: {coro}")
                 result = original_patched(coro, debug=debug)
                 print(f"DEBUG: asyncio.run returned: {result}")
                 return result
+
             wt.asyncio.run = debug_patched
 
             # Also patch _mark_step to see what's happening
             original_mark_step = wt._mark_step
+
             def debug_mark_step(step_run_id, status, output=None, error=None):
-                print(f"DEBUG: _mark_step called: step_run_id={step_run_id}, status={status}, output={output}, error={error}")
+                print(
+                    f"DEBUG: _mark_step called: step_run_id={step_run_id}, status={status}, output={output}, error={error}"
+                )
                 return original_mark_step(step_run_id, status, output, error)
+
             wt._mark_step = debug_mark_step
 
             # Also patch _mark_run
             original_mark_run = wt._mark_run
+
             def debug_mark_run(run_id, status, error=None):
-                print(f"DEBUG: _mark_run called: run_id={run_id}, status={status}, error={error}")
+                print(
+                    f"DEBUG: _mark_run called: run_id={run_id}, status={status}, error={error}"
+                )
                 return original_mark_run(run_id, status, error)
+
             wt._mark_run = debug_mark_run
 
             submit_run_task.run(
@@ -261,11 +282,22 @@ class TestSubmitRunTask:
             with wt._sync_session_maker() as session:
                 from app.pipelines.models import Run, StepRun
                 from sqlalchemy import select
-                run_check = session.execute(select(Run).where(Run.id == run.id)).scalar_one_or_none()
-                print(f"DEBUG AFTER: run in worker DB = {run_check}, status={run_check.status if run_check else 'None'}")
+
+                run_check = session.execute(
+                    select(Run).where(Run.id == run.id)
+                ).scalar_one_or_none()
+                print(
+                    f"DEBUG AFTER: run in worker DB = {run_check}, status={run_check.status if run_check else 'None'}"
+                )
                 if run_check:
-                    step_check = session.execute(select(StepRun).where(StepRun.run_id == run.id)).scalars().all()
-                    print(f"DEBUG AFTER: step_runs in worker DB = {[(s.id, s.status, s.output) for s in step_check]}")
+                    step_check = (
+                        session.execute(select(StepRun).where(StepRun.run_id == run.id))
+                        .scalars()
+                        .all()
+                    )
+                    print(
+                        f"DEBUG AFTER: step_runs in worker DB = {[(s.id, s.status, s.output) for s in step_check]}"
+                    )
 
         # Verify run is succeeded (need to refresh because session has expire_on_commit=False)
         await db_session.refresh(run)
@@ -493,7 +525,9 @@ class TestSubmitRunTask:
 
         await db_session.refresh(step_run)
         assert step_run.status == "failed"
-        assert "TimeoutException" in step_run.error or "timeout" in step_run.error.lower()
+        assert (
+            "TimeoutException" in step_run.error or "timeout" in step_run.error.lower()
+        )
 
     async def test_submit_run_double_delivery(
         self, db_session: AsyncSession, pending_run: dict, submit_run_task
