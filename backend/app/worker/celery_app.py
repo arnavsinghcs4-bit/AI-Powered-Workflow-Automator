@@ -16,4 +16,11 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        # Run stale run recovery every minute
+        "reset-stale-runs": {
+            "task": "scheduler.reset_stale_runs",
+            "schedule": 60.0,  # every 60 seconds
+        },
+    },
 )

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import select, update
+from sqlalchemy import select, update, text
 from sqlalchemy.orm import sessionmaker
 
 from app.execution.logging import set_logger
@@ -27,6 +27,9 @@ from app.worker.database import sync_engine
 
 # Sync session factory for the worker's sync loop.
 _sync_session_maker = sessionmaker(bind=sync_engine, expire_on_commit=False)
+
+# Token budget per run (1 hour window)
+DEFAULT_TOKEN_BUDGET = 100000
 
 
 def _atomic_claim(run_id: int) -> int | None:
@@ -53,7 +56,6 @@ def _atomic_claim(run_id: int) -> int | None:
 
 def _reset_stale_runs() -> None:
     """Re-claim runs that have been running longer than the lease window."""
-    from sqlalchemy import text
 
     with _sync_session_maker() as session:
         session.execute(
@@ -65,6 +67,12 @@ def _reset_stale_runs() -> None:
             )
         )
         session.commit()
+
+
+@shared_task(bind=True, name="scheduler.reset_stale_runs")
+def reset_stale_runs_task(self) -> None:
+    """Celery beat task to reset stale runs."""
+    _reset_stale_runs()
 
 
 def _load_steps(run_id: int) -> list[dict[str, Any]]:
@@ -142,6 +150,13 @@ def submit_run(
         _mark_run(run_id, "failed", error="No step_runs found for run")
         return
 
+    # Get run's user_id for credential resolution and token budget
+    run_user_id = None
+    with _sync_session_maker() as session:
+        run = session.execute(select(Run).where(Run.id == run_id)).scalar_one_or_none()
+        if run:
+            run_user_id = run.user_id
+
     # Build Step instances from the definition.
     from app.steps.registry import build_steps
 
@@ -151,6 +166,30 @@ def submit_run(
         _mark_run(run_id, "failed", error=f"Step build failed: {e}")
         return
 
+    # Build credential resolver for this run's user
+    async def _resolve_credential(credential_name: str) -> dict:
+        from app.worker.database import get_sync_engine
+        from app.credentials.models import Credential
+        from app.credentials.service import get_encryption
+        import json
+
+        if run_user_id is None:
+            raise ValueError("run_user_id not available")
+
+        engine = get_sync_engine()
+        with sessionmaker(bind=engine, expire_on_commit=False)() as session:
+            cred = session.execute(
+                select(Credential).where(
+                    Credential.user_id == run_user_id,
+                    Credential.name == credential_name,
+                )
+            ).scalar_one_or_none()
+            if cred is None:
+                raise ValueError(f"Credential '{credential_name}' not found")
+            decrypted = get_encryption().decrypt(cred.encrypted_value)
+            return json.loads(decrypted)
+
+    # Inject credential resolver and other dependencies into steps
     node_to_step = {
         node["id"]: step
         for node in definition.get("nodes", [])
@@ -176,6 +215,17 @@ def submit_run(
             attempt=sr["attempt"],
             inputs=sr["input"],
         )
+
+        # Inject dependencies based on step type
+        if hasattr(step, "credential_resolver"):
+            step.credential_resolver = _resolve_credential
+        if hasattr(step, "user_id") and run_user_id:
+            step.user_id = run_user_id
+        if hasattr(step, "step_run_id"):
+            step.step_run_id = sr["id"]
+        if hasattr(step, "token_budget"):
+            step.token_budget = DEFAULT_TOKEN_BUDGET
+
         try:
             result = asyncio.run(step.execute(ctx))
         except Exception as e:

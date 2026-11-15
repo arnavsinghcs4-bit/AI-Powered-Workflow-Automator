@@ -17,10 +17,16 @@ from typing import Any
 from app.steps.base import Step
 from app.steps.http_request import HttpRequestStep
 from app.steps.transform import TransformStep
+from app.steps.webhook_out import WebhookOutStep
+from app.steps.email_send import EmailSendStep
+from app.steps.llm_extract import LLMExtractStep
 
 STEP_TYPES = {
     "http_request": HttpRequestStep,
     "transform": TransformStep,
+    "webhook_out": WebhookOutStep,
+    "email_send": EmailSendStep,
+    "llm_extract": LLMExtractStep,
 }
 
 
