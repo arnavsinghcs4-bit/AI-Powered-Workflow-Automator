@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
-from cryptography.fernet import MultiFernet
+from cryptography.fernet import Fernet,MultiFernet
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,19 +38,12 @@ class EncryptionKeyError(Exception):
 
 
 def _get_encryption() -> MultiFernet:
-    """Lazily get the global encryption instance, raises early in non-dev if key missing."""
+    """Build the encryption object from SECRETS_ENCRYPTION_KEY (comma-separated for rotation)."""
     key_env = os.getenv("SECRETS_ENCRYPTION_KEY")
     if not key_env:
-        if config.ENV == "dev":
-            # Generate deterministic dev key at first use
-            from cryptography.fernet import Fernet
-            dev_key = Fernet.generate_key()
-            return MultiFernet([Fernet(dev_key)])
-        raise EncryptionKeyError(
-            "SECRETS_ENCRYPTION_KEY environment variable is required in non-dev environments"
-        )
+        raise EncryptionKeyError("SECRETS_ENCRYPTION_KEY environment variable is required")
 
-    # Support key rotation: comma-separated keys, first is primary for encryption
+    # First key encrypts; all keys can decrypt (rotation).
     keys = [k.strip() for k in key_env.split(",") if k.strip()]
     if not keys:
         raise EncryptionKeyError("SECRETS_ENCRYPTION_KEY must contain at least one key")
@@ -58,10 +51,9 @@ def _get_encryption() -> MultiFernet:
     fernets = []
     for key in keys:
         try:
-            fernets.append(Fernet(key.encode() if isinstance(key, str) else key))
-        except Exception as e:
-            raise EncryptionKeyError(f"Invalid Fernet key: {e}")
-
+            fernets.append(Fernet(key.encode()))
+        except ValueError as e:
+            raise EncryptionKeyError("Invalid Fernet key in SECRETS_ENCRYPTION_KEY") from e
     return MultiFernet(fernets)
 
 
