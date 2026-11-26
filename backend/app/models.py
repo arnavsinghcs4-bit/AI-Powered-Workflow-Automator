@@ -36,6 +36,9 @@ class User(Base):
     refresh_tokens = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
+    credentials = relationship(
+        "Credential", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class File(Base):
