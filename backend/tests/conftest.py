@@ -25,8 +25,8 @@ os.environ["ENV"] = "test"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"  # Test Redis URL
 
 # Throwaway encryption key for Phase 4 credential tests
-# Generated: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-os.environ["SECRETS_ENCRYPTION_KEY"] = Fernet.generate_key().decode()  # 64-char base64
+# Must be a valid Fernet key (32 bytes, base64 encoded = 44 chars)
+os.environ["SECRETS_ENCRYPTION_KEY"] = "y_tqisgD-MSa2Hz5Fnn91cFBcnXV7zcX8qV72lU896Q="
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()

@@ -1,6 +1,7 @@
 """Celery worker configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import config
 
@@ -16,4 +17,10 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        "reset-stale-runs": {
+            "task": "scheduler.reset_stale_runs",
+            "schedule": 60.0,  # Every 60 seconds
+        },
+    },
 )

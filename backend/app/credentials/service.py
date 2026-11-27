@@ -37,6 +37,13 @@ class EncryptionKeyError(Exception):
     pass
 
 
+def _validate_payload(kind: CredentialKind, payload: dict) -> None:
+    """Validate credential payload against kind-specific schema."""
+    if kind not in CREDENTIAL_PAYLOAD_SCHEMAS:
+        raise CredentialValidationError(f"Unknown credential kind: {kind}")
+    CREDENTIAL_PAYLOAD_SCHEMAS[kind].model_validate(payload)
+
+
 def _get_encryption() -> MultiFernet:
     """Build the encryption object from SECRETS_ENCRYPTION_KEY (comma-separated for rotation)."""
     key_env = os.getenv("SECRETS_ENCRYPTION_KEY")

@@ -131,6 +131,8 @@ class Run(Base):
     # Lease column for stale-run recovery. Set by worker when claiming a run;
     # NULL = unclaimed. Stale if status='running' AND claimed_at < now() - 5 min.
     claimed_at = Column(DateTime(timezone=True), nullable=True)
+    # Recovery attempts counter for stale-run recovery capping
+    recovery_attempts = Column(Integer, server_default="0", nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

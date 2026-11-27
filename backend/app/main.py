@@ -60,3 +60,9 @@ app.include_router(health_router)
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(pipelines_router, tags=["pipelines"])
 app.include_router(credentials_router)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {"message": "AI-Powered Workflow Automator API"}

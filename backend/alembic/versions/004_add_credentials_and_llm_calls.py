@@ -110,6 +110,9 @@ def upgrade() -> None:
     if IS_SUPABASE:
         op.execute("REVOKE ALL ON llm_calls FROM anon, authenticated;")
 
+    # ---- Phase 4 additions to runs table ----
+    op.add_column("runs", sa.Column("recovery_attempts", sa.Integer(), server_default="0", nullable=False))
+
 
 def downgrade() -> None:
     """Drop credentials and llm_calls tables."""
@@ -119,6 +122,8 @@ def downgrade() -> None:
     if IS_SUPABASE:
         op.execute("REVOKE ALL ON llm_calls FROM anon, authenticated;")
     op.drop_table("llm_calls")
+
+    op.drop_column("runs", "recovery_attempts")
 
     op.drop_index("idx_credentials_user_id", table_name="credentials", if_exists=True)
     op.execute("ALTER TABLE credentials DISABLE ROW LEVEL SECURITY;")

@@ -699,7 +699,7 @@ class TestCrossUserIsolation:
         """User A cannot access User B's run."""
         user_b = User(email="userb@test.com", password_hash="$2b$12$test")
         db_session.add(user_b)
-        await db_session.flush()
+        await db_session.commit()
 
         pipeline = Pipeline(user_id=test_user.id, name="Test")
         db_session.add(pipeline)
@@ -709,7 +709,7 @@ class TestCrossUserIsolation:
             pipeline_id=pipeline.id, version_number=1, definition={"nodes": []}
         )
         db_session.add(version)
-        await db_session.flush()
+        await db_session.commit()
 
         run = Run(
             pipeline_id=pipeline.id,
