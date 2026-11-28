@@ -1,6 +1,7 @@
 """Celery worker configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import config
 
@@ -17,10 +18,16 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     beat_schedule={
+<<<<<<< HEAD
         # Run stale run recovery every minute
         "reset-stale-runs": {
             "task": "scheduler.reset_stale_runs",
             "schedule": 60.0,  # every 60 seconds
+=======
+        "reset-stale-runs": {
+            "task": "scheduler.reset_stale_runs",
+            "schedule": 60.0,  # Every 60 seconds
+>>>>>>> phase4-secrets-and-steps
         },
     },
 )

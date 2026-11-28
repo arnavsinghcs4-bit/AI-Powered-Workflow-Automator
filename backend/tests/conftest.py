@@ -1,6 +1,7 @@
 """Testing configuration and fixtures."""
-
 import os
+from cryptography.fernet import Fernet
+
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urlparse
 
@@ -15,11 +16,17 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+
+
 # Force-set test environment BEFORE any app imports (setdefault would lose to CI)
 os.environ["ENABLE_RATE_LIMITING"] = "false"
 os.environ["JWT_SECRET"] = "test-secret-key-at-least-32-characters-long-12345"
 os.environ["ENV"] = "test"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"  # Test Redis URL
+
+# Throwaway encryption key for Phase 4 credential tests
+# Must be a valid Fernet key (32 bytes, base64 encoded = 44 chars)
+os.environ["SECRETS_ENCRYPTION_KEY"] = "y_tqisgD-MSa2Hz5Fnn91cFBcnXV7zcX8qV72lU896Q="
 
 # Safety guard: DATABASE_TEST_URL must be set and not point to Supabase
 test_url = os.getenv("DATABASE_TEST_URL", "").strip()
