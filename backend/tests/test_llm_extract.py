@@ -19,7 +19,7 @@ class TestLLMExtractSchemaValidation:
             )
 
     @pytest.mark.asyncio
-    async test_invalid_prompt_raises(self):
+    async def test_invalid_prompt_raises(self):
         """Missing prompt raises ValueError in config."""
         with pytest.raises(ValueError, match="config.prompt is required"):
             LLMExtractStep(

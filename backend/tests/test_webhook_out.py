@@ -1,16 +1,15 @@
 """Tests for Phase 4 webhook_out step."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
-from app.steps.webhook_out import WebhookOutStep
-from app.steps.base import StepContext, StepOutcome, StepResult
+from app.steps.webhook_out import WebhookOutStep, SsrfError
+from app.credentials.schemas import CredentialCreate
 
 
 class TestWebhookOutSsrf:
     """SSRF protection tests for webhook_out step."""
 
-    @pytest.mark.asyncio
-    async def test_rejects_ftp_scheme(self):
+    def test_rejects_ftp_scheme(self):
         """FTP scheme is rejected."""
         step = WebhookOutStep(
             config={
@@ -19,11 +18,9 @@ class TestWebhookOutSsrf:
             },
             credential_resolver=None,
         )
-        # SSRF validation happens at runtime; this tests config validation
         assert step.method == "POST"
 
-    @pytest.mark.asyncio
-    async def test_rejects_localhost(self):
+    def test_rejects_localhost(self):
         """localhost IP is blocked by SSRF."""
         step = WebhookOutStep(
             config={
@@ -32,10 +29,8 @@ class TestWebhookOutSsrf:
             },
             credential_resolver=None,
         )
-        # Would be validated at execution time via SSRF protection
 
-    @pytest.mark.asyncio
-    async def test_rejects_private_ip(self):
+    def test_rejects_private_ip(self):
         """Private IP ranges are blocked by SSRF."""
         step = WebhookOutStep(
             config={
@@ -45,8 +40,7 @@ class TestWebhookOutSsrf:
             credential_resolver=None,
         )
 
-    @pytest.mark.asyncio
-    async def test_rejects_metadata_hostname(self):
+    def test_rejects_metadata_hostname(self):
         """Metadata service hostname is blocked."""
         step = WebhookOutStep(
             config={
@@ -60,8 +54,7 @@ class TestWebhookOutSsrf:
 class TestWebhookOutHeaderInjection:
     """Header injection rejection tests."""
 
-    @pytest.mark.asyncio
-    async def test_rejects_header_injection_in_url(self):
+    def test_rejects_header_injection_in_url(self):
         """URL with header injection characters is rejected."""
         step = WebhookOutStep(
             config={
@@ -70,11 +63,8 @@ class TestWebhookOutHeaderInjection:
             },
             credential_resolver=None,
         )
-        # Config validation should catch injection patterns
-        # The url value contains a newline followed by injection
 
-    @pytest.mark.asyncio
-    async def test_rejects_header_injection_in_headers(self):
+    def test_rejects_header_injection_in_headers(self):
         """Header injection in config headers is caught."""
         step = WebhookOutStep(
             config={
@@ -89,18 +79,16 @@ class TestWebhookOutHeaderInjection:
 class TestWebhookOutRecipientBodyCaps:
     """Recipient and body size cap tests."""
 
-    @pytest.mark.asyncio
-    async def test_body_size_cap(self):
+    def test_body_size_cap(self):
         """Large body is truncated or rejected."""
         step = WebhookOutStep(
             config={
                 "method": "POST",
                 "url": "http://example.com/hook",
-                "body": {"large": "x" * 100000},  # 100KB body
+                "body": {"large": "x" * 100000},
             },
             credential_resolver=None,
         )
-        # Step should handle oversized bodies - either reject or cap
 
 
 class TestWebhookOutExecute:
@@ -111,14 +99,12 @@ class TestWebhookOutExecute:
         """Successful webhook execution with valid credential."""
         from app.credentials.service import create_credential, get_credential_by_name
         from app.credentials.models import CredentialKind
-
-        # Create user and credential
         from app.models import User
+
         user = User(email="webhook-test@example.com", password_hash="$2b$12$test")
         db_session.add(user)
         await db_session.commit()
 
-        # Create API key credential
         cred = await create_credential(
             db_session,
             CredentialCreate(
@@ -129,22 +115,22 @@ class TestWebhookOutExecute:
             user.id,
         )
 
-        # Mock the HTTP client
         with patch("app.steps.webhook_out.SharedHTTPClient") as MockClient:
             mock_client = AsyncMock()
-            mock_client.request = AsyncMock(return_value=MagicMock(
-                status_code=200,
-                body=b'{"ok": true}',
-                headers={},
-            ))
+            mock_client.request = AsyncMock(return_value=type('obj', (object,), {
+                'status_code': 200,
+                'body': b'{"ok": true}',
+                'headers': {},
+            })())
             MockClient.return_value = mock_client
 
+            from app.steps.base import StepContext, StepOutcome
             step = WebhookOutStep(
                 config={
                     "method": "POST",
                     "url": "http://example.com/hook",
                 },
-                credential_resolver=lambda name: await get_credential_by_name(db_session, name),
+                credential_resolver=lambda name: AsyncMock(return_value=await cred),
             )
 
             ctx = StepContext(
@@ -159,25 +145,21 @@ class TestWebhookOutExecute:
             assert result.outcome == StepOutcome.SUCCEEDED
 
     @pytest.mark.asyncio
-    async def test_ssrf_error_propagates(self, db_session):
+    async def test_ssrf_error_propagates(self):
         """SSRF error propagates as step failure."""
-        from app.steps.webhook_out import SsrfError
-
-        step = WebhookOutStep(
-            config={
-                "method": "POST",
-                "url": "http://169.254.169.254/latest/meta-data/",
-            },
-            credential_resolver=None,
-        )
-
-        # When SSRF check fires during execution
         with patch("app.steps.webhook_out.SharedHTTPClient") as MockClient:
             mock_client = AsyncMock()
-            mock_client.request = AsyncMock(side_effect=SsrfError(
-                "SSRF blocked: metadata service"
-            ))
+            mock_client.request = AsyncMock(side_effect=SsrfError("SSRF blocked: metadata service"))
             MockClient.return_value = mock_client
+
+            from app.steps.base import StepContext, StepOutcome
+            step = WebhookOutStep(
+                config={
+                    "method": "POST",
+                    "url": "http://169.254.169.254/latest/meta-data/",
+                },
+                credential_resolver=None,
+            )
 
             ctx = StepContext(
                 variables={},
